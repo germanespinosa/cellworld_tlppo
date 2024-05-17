@@ -1,0 +1,16 @@
+{
+    "major": 0,
+    "minor": 0,
+    "build": 13,
+    "source_folder": "cellworld_tlppo",
+    "module_name": "cellworld_tlppo",
+    "package_name": "cellworld_tlppo",
+    "author": "author",
+    "author_email": "author@email",
+    "description": "",
+    "install_requires": ["cellworld_game", "cellworld_gym"],
+    "license_type": "MIT",
+    "url": "",
+    "license_file": "../resources/license.txt",
+    "readme_file": "../resources/README.md"
+}
