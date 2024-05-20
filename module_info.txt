@@ -8,7 +8,7 @@
     "author": "author",
     "author_email": "author@email",
     "description": "",
-    "install_requires": ["cellworld_game", "cellworld_gym"],
+    "install_requires": ["cellworld_game", "cellworld_gym", "scikit-learn"],
     "license_type": "MIT",
     "url": "",
     "license_file": "../resources/license.txt",

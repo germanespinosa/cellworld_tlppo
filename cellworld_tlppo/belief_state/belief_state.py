@@ -2,7 +2,7 @@ import typing
 import torch
 from shapely import Polygon, Point
 from .belief_state_component import BeliefStateComponent
-from .utils import get_index
+from .utils import get_index, gaussian_tensor
 
 
 class BeliefState(object):
@@ -11,13 +11,17 @@ class BeliefState(object):
                  arena: Polygon,
                  occlusions: typing.List[Polygon],
                  definition: int,
-                 components: typing.List[BeliefStateComponent]):
+                 components: typing.List[BeliefStateComponent],
+                 other_size: int = 0):
         if torch.cuda.is_available():
             self.device = torch.device("cuda")  # Set device to GPU
             print("GPU is available")
         else:
             self.device = torch.device("cpu")  # Set device to CPU
             print("GPU is not available, using CPU instead")
+        if other_size == 0:
+            other_size = definition // 20
+        self.other_size = other_size
         self.arena = arena
         self.occlusions = occlusions
         self.min_x, self.min_y, self.max_x, self.max_y = arena.bounds
@@ -39,7 +43,7 @@ class BeliefState(object):
                     for occlusion in self.occlusions:
                         if occlusion.contains(point):
                             self.map[i, j] = 0
-                            self.probability_distribution[i,j] = 1
+                            self.probability_distribution[i, j] = 1
                             break
                     else:
                         self.map[i, j] = 1
@@ -82,7 +86,9 @@ class BeliefState(object):
     def update_other_location(self, other_location: tuple):
         i, j, _, _, _, _ = self.get_location_indices(other_location)
         self.probability_distribution.zero_()
-        self.probability_distribution[i, j] = 1
+        self.probability_distribution = gaussian_tensor(dimensions=self.probability_distribution.shape,
+                                                        sigma=self.other_size,
+                                                        center=(i, j)).to(self.device)
         self.other_indices = (i, j)
         self.other_visible = True
         for component in self.components:

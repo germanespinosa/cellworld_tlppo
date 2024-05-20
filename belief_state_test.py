@@ -12,13 +12,13 @@ bot_evade = BotEvade(world_name="21_05",
                      render=True,
                      use_predator=True)
 
-gc = belief.GaussianDiffusionComponent(.35 / 2.34 * .25)
+gc = belief.GaussianDiffusionComponent(.20 / 2.34 * .25)
 dc = belief.DirectedDiffusionComponent(.35 / 2.34 * .25)
 
 bs = belief.BeliefState(arena=bot_evade.arena,
                         occlusions=bot_evade.occlusions,
                         definition=100,
-                        components=[dc])
+                        components=[gc])
 
 
 def render_bs(screen, coordinate_converter: CoordinateConverter):
@@ -44,8 +44,10 @@ def render_bs(screen, coordinate_converter: CoordinateConverter):
             alpha = int(255 * (prob / max_prob))
             color_surface.set_alpha(alpha)
             x, y = coordinate_converter.from_canonical((bs.points[i][j].x, bs.points[i][j].y))
+
             # Blit (copy) the colored surface onto the main screen
-            screen.blit(color_surface, (x, y))
+            screen.blit(color_surface, (x-cell_size/2, y-cell_size/2))
+
 
 bot_evade.view.add_render_step(render_bs)
 bot_evade.reset()
