@@ -43,7 +43,7 @@ class BeliefState(object):
                     for occlusion in self.occlusions:
                         if occlusion.contains(point):
                             self.map[i, j] = 0
-                            self.probability_distribution[i, j] = 1
+                            self.probability_distribution[i, j] = 1.0
                             break
                     else:
                         self.map[i, j] = 1
@@ -85,10 +85,11 @@ class BeliefState(object):
 
     def update_other_location(self, other_location: tuple):
         i, j, _, _, _, _ = self.get_location_indices(other_location)
-        self.probability_distribution.zero_()
-        self.probability_distribution = gaussian_tensor(dimensions=self.probability_distribution.shape,
-                                                        sigma=self.other_size,
-                                                        center=(i, j)).to(self.device)
+        other_distribution = gaussian_tensor(dimensions=self.probability_distribution.shape,
+                                             sigma=self.other_size,
+                                             center=(i, j)).to(self.device)
+        self.probability_distribution.copy_(other_distribution)
+        self.probability_distribution /= self.probability_distribution.sum()
         self.other_indices = (i, j)
         self.other_visible = True
         for component in self.components:

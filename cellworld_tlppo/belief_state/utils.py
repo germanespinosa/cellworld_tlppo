@@ -23,8 +23,8 @@ def gaussian_tensor(dimensions, sigma, center=None):
         center_x, center_y = center
 
     # Create x and y coordinates (0 to size-1)
-    x = torch.arange(width, dtype=torch.float32)
-    y = torch.arange(height, dtype=torch.float32)
+    x = torch.arange(width)
+    y = torch.arange(height)
 
     # Create meshgrid of coordinates
     X, Y = torch.meshgrid(x, y, indexing='ij')
