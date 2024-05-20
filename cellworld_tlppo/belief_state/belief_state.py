@@ -3,6 +3,7 @@ import torch
 from shapely import Polygon, Point
 from .belief_state_component import BeliefStateComponent
 from .utils import get_index, gaussian_tensor
+from cellworld_game import CoordinateConverter
 
 
 class BeliefState(object):
@@ -20,7 +21,7 @@ class BeliefState(object):
             self.device = torch.device("cpu")  # Set device to CPU
             print("GPU is not available, using CPU instead")
         if other_size == 0:
-            other_size = definition // 20
+            other_size = definition // 40
         self.other_size = other_size
         self.arena = arena
         self.occlusions = occlusions
@@ -43,9 +44,9 @@ class BeliefState(object):
                     for occlusion in self.occlusions:
                         if occlusion.contains(point):
                             self.map[i, j] = 0
-                            self.probability_distribution[i, j] = 1.0
                             break
                     else:
+                        self.probability_distribution[i, j] = 1.0
                         self.map[i, j] = 1
                 else:
                     self.map[i, j] = 0
@@ -55,7 +56,10 @@ class BeliefState(object):
             component.on_belief_state_set()
         self.self_indices = None
         self.other_indices = None
+        self.self_location = None
+        self.other_location = None
         self.other_visible = False
+        self.visibility_polygon = None
         self.time_step = 0
         self.probability_distribution /= self.probability_distribution.sum()
 
@@ -69,36 +73,76 @@ class BeliefState(object):
         return i, j, low_i, low_j, dist_i, dist_j
 
     def update_self_location(self, self_location: tuple):
-        i, j, _, _, _, _ = self.get_location_indices(self_location)
-        self.self_indices = (i, j)
-        for component in self.components:
-            component.on_self_location_update()
+        self.self_location = self_location
 
     def update_visibility(self, visibility_polygon: Polygon):
-        for i in range(self.definition):
-            for j in range(self.y_steps):
-                if self.map[i, j]:
-                    if visibility_polygon.contains(self.points[i][j]):
-                        self.probability_distribution[i, j] = 0
-        for component in self.components:
-            component.on_visibility_update()
+        self.visibility_polygon = visibility_polygon
 
     def update_other_location(self, other_location: tuple):
-        i, j, _, _, _, _ = self.get_location_indices(other_location)
-        other_distribution = gaussian_tensor(dimensions=self.probability_distribution.shape,
-                                             sigma=self.other_size,
-                                             center=(i, j)).to(self.device)
-        self.probability_distribution.copy_(other_distribution)
-        self.probability_distribution /= self.probability_distribution.sum()
-        self.other_indices = (i, j)
-        self.other_visible = True
-        for component in self.components:
-            component.on_other_location_update()
+        self.other_location = other_location
 
     def tick(self):
+        if self.self_location:
+            i, j, _, _, _, _ = self.get_location_indices(self.self_location)
+            self.self_indices = (i, j)
+            for component in self.components:
+                component.on_self_location_update()
+
+        if self.other_location:
+            i, j, _, _, _, _ = self.get_location_indices(self.other_location)
+            other_distribution = gaussian_tensor(dimensions=self.probability_distribution.shape,
+                                                 sigma=self.other_size,
+                                                 center=(i, j)).to(self.device)
+            self.probability_distribution.copy_(other_distribution)
+
+            self.probability_distribution *= self.map
+            self.probability_distribution /= self.probability_distribution.sum()
+            self.other_indices = (i, j)
+            self.other_visible = True
+            for component in self.components:
+                component.on_other_location_update()
+        elif self.visibility_polygon:
+            for i in range(self.definition):
+                for j in range(self.y_steps):
+                    if self.map[i, j]:
+                        if self.visibility_polygon.contains(self.points[i][j]):
+                            self.probability_distribution[i, j] = 0
+            for component in self.components:
+                component.on_visibility_update()
+
         for component in self.components:
             component.on_tick()
             self.probability_distribution *= self.map
             self.probability_distribution /= self.probability_distribution.sum()
+
         self.time_step += 1
         self.other_visible = False
+        self.visibility_polygon = None
+        self.other_location = None
+        self.self_location = None
+
+    def render(self, screen, coordinate_converter: CoordinateConverter):
+        import pygame
+        prob_matrix = self.probability_distribution.cpu().numpy()
+        max_prob = prob_matrix.max()
+        if not max_prob:
+            return
+        cell_size = 9
+
+        # Get dimensions
+        height, width = prob_matrix.shape
+        screen_width, screen_height = width * cell_size, height * cell_size
+
+        # Precompute color surface for efficiency
+        color_surface = pygame.Surface((cell_size, cell_size), pygame.SRCALPHA)
+        color_surface.fill((255, 0, 0))
+
+        for i in range(height):
+            for j in range(width):
+                prob = prob_matrix[i, j]
+                alpha = int(255 * (prob / max_prob))
+                color_surface.set_alpha(alpha)
+                x, y = coordinate_converter.from_canonical((self.points[i][j].x, self.points[i][j].y))
+
+                # Blit (copy) the colored surface onto the main screen
+                screen.blit(color_surface, (x - cell_size / 2, y - cell_size / 2))

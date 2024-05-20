@@ -22,11 +22,12 @@ class DirectedDiffusionComponent(BeliefStateComponent):
         target = self.belief_state.self_indices
         distance = math.dist(self.source, target)
         step_count = distance / self.step_distance
-        self.step = tuple((si - ti) / step_count for si, ti in zip(self.source, target))
+        self.step = tuple((ti - si) / step_count for si, ti in zip(self.source, target))
         self.pending_time_steps = int(step_count)
 
     def predict(self, probability_distribution: torch.tensor):
-        if self.belief_state.other_visible:
+        if not self.belief_state.other_visible:
             if self.pending_time_steps:
-                probability_distribution.copy *= shift_tensor(tensor=probability_distribution, displacement=self.step)
+                probability_distribution.copy_(shift_tensor(tensor=probability_distribution, displacement=self.step))
                 self.pending_time_steps -= 1
+
