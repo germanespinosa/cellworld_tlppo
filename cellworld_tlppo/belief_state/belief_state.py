@@ -16,10 +16,8 @@ class BeliefState(object):
                  other_size: int = 0):
         if torch.cuda.is_available():
             self.device = torch.device("cuda")  # Set device to GPU
-            print("GPU is available")
         else:
             self.device = torch.device("cpu")  # Set device to CPU
-            print("GPU is not available, using CPU instead")
         if other_size == 0:
             other_size = definition // 40
         self.other_size = other_size
@@ -29,15 +27,15 @@ class BeliefState(object):
         self.definition = definition
         self.granularity = (self.max_x - self.min_x) / definition
         self.y_steps = int((self.max_y - self.min_y) // self.granularity)
-        self.map = torch.zeros((self.definition, self.y_steps))
-        self.map.to(self.device)
-        self.probability_distribution = torch.zeros(self.definition, self.y_steps)
-        self.probability_distribution.to(self.device)
+        self.map = torch.zeros((self.definition, self.y_steps), device=self.device)
+        self.probability_distribution = torch.zeros(self.definition, self.y_steps, device=self.device)
         self.points = [[None for _ in range(self.y_steps)] for _ in range(self.definition)]
+        points_list = []
         for i in range(self.definition):
             x = (i * self.granularity) + self.min_x
             for j in range(self.y_steps):
                 y = (j * self.granularity) + self.min_y
+                points_list.append((x,y))
                 point = Point(x, y)
                 self.points[i][j] = point
                 if self.arena.contains(point):
@@ -50,6 +48,8 @@ class BeliefState(object):
                         self.map[i, j] = 1
                 else:
                     self.map[i, j] = 0
+        self.points_tensor = torch.tensor(points_list, device=self.device)
+
         self.components = components
         for component in self.components:
             component.set_belief_state(self)
@@ -92,7 +92,8 @@ class BeliefState(object):
             i, j, _, _, _, _ = self.get_location_indices(self.other_location)
             other_distribution = gaussian_tensor(dimensions=self.probability_distribution.shape,
                                                  sigma=self.other_size,
-                                                 center=(i, j)).to(self.device)
+                                                 center=(i, j),
+                                                 device=self.device)
             self.probability_distribution.copy_(other_distribution)
 
             self.probability_distribution *= self.map
@@ -146,3 +147,23 @@ class BeliefState(object):
 
                 # Blit (copy) the colored surface onto the main screen
                 screen.blit(color_surface, (x - cell_size / 2, y - cell_size / 2))
+
+    def get_probability(self, location: tuple, radius: float):
+        i, j, low_i, low_j, dist_i, dist_j = self.get_location_indices(location)
+        r = int(radius * self.definition)
+
+        size = 2 * r + 1
+        center = r  # The center index
+
+        # Create a grid of indices
+        y, x = torch.meshgrid(torch.arange(size, device=self.device),
+                              torch.arange(size, device=self.device),
+                              indexing='ij')
+
+        # Compute the distance from the center for each index
+        distance = torch.sqrt((x - center) ** 2 + (y - center) ** 2)
+
+        # Create the tensor with values 1 where the distance is less than or equal to r
+        stencil = (distance <= r).float()
+
+        return float((self.probability_distribution[i - r: i - r + size, j - r: j - r + size] * stencil).sum())

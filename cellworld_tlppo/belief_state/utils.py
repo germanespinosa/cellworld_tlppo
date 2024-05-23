@@ -14,7 +14,10 @@ def get_index(value, lower_bound, step):
     return index, low_bound, distance
 
 
-def gaussian_tensor(dimensions, sigma, center=None):
+def gaussian_tensor(dimensions,
+                    sigma,
+                    center=None,
+                    device=torch.device('cpu')):
     width, height = dimensions
 
     if center is None:
@@ -23,8 +26,8 @@ def gaussian_tensor(dimensions, sigma, center=None):
         center_x, center_y = center
 
     # Create x and y coordinates (0 to size-1)
-    x = torch.arange(width)
-    y = torch.arange(height)
+    x = torch.arange(width, device=device)
+    y = torch.arange(height, device=device)
 
     # Create meshgrid of coordinates
     X, Y = torch.meshgrid(x, y, indexing='ij')

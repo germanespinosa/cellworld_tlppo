@@ -11,10 +11,10 @@ bot_evade = BotEvade(world_name="21_05",
                      render=True,
                      use_predator=True)
 
-save_video_output(bot_evade, ".")
+# save_video_output(bot_evade, ".")
 
-gc = belief.GaussianDiffusionComponent(.15 / 2.34 * .25)
-dc = belief.DirectedDiffusionComponent(.20 / 2.34 * .25)
+gc = belief.GaussianDiffusionComponent(.25 / 2.34 * .25)
+dc = belief.DirectedDiffusionComponent(.10 / 2.34 * .25)
 
 bs = belief.BeliefState(arena=bot_evade.arena,
                         occlusions=bot_evade.occlusions,
@@ -22,7 +22,7 @@ bs = belief.BeliefState(arena=bot_evade.arena,
                         components=[dc, gc])
 
 
-bot_evade.view.add_render_step(bs.render, z_index=5)
+bot_evade.view.add_render_step(bs.render, z_index=200)
 bot_evade.reset()
 # prey
 puff_cool_down = 0
@@ -30,9 +30,9 @@ last_destination_time = -3
 random_actions = 50
 
 action_count = len(bot_evade.loader.full_action_list)
-visibility_polygon, a = bot_evade.visibility.get_visibility_polygon(location=bot_evade.prey.state.location,
-                                                                    direction=bot_evade.prey.state.direction,
-                                                                    view_field=360)
+visibility_polygon = bot_evade.visibility.get_visibility_polygon(src=bot_evade.prey.state.location,
+                                                                 direction=bot_evade.prey.state.direction,
+                                                                 view_field=360)
 bs.update_visibility(visibility_polygon=visibility_polygon)
 
 bs.tick()
@@ -50,14 +50,15 @@ while bot_evade.running:
 
     for i in range(10):
         bot_evade.step()
-        if bot_evade.predator_visible:
-            bs.update_other_location(bot_evade.predator.state.location)
-            bs.update_self_location(bot_evade.prey.state.location)
+        # if bot_evade.predator_visible:
+        #     bs.update_other_location(bot_evade.predator.state.location)
+        #     bs.update_self_location(bot_evade.prey.state.location)
 
-    visibility_polygon, a = bot_evade.visibility.get_visibility_polygon(location=bot_evade.prey.state.location,
-                                                                        direction=bot_evade.prey.state.direction,
-                                                                        view_field=360)
+    visibility_polygon = bot_evade.visibility.get_visibility_polygon(src=bot_evade.prey.state.location,
+                                                                     direction=bot_evade.prey.state.direction,
+                                                                     view_field=360)
 
     bs.update_visibility(visibility_polygon=visibility_polygon)
+    print(bs.get_probability((.5, .5), .1))
     bs.tick()
 

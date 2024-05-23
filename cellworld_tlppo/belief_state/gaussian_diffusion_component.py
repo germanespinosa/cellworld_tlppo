@@ -17,7 +17,7 @@ class GaussianDiffusionComponent(BeliefStateComponent):
     def on_belief_state_set(self):
         self.stencil_size = math.ceil(self.diffusion_rate / self.belief_state.granularity)
         self.kernel_dimensions = (self.stencil_size * 2 + 1, self.stencil_size * 2 + 1)
-        kernel = gaussian_tensor(self.kernel_dimensions, self.stencil_size)
+        kernel = gaussian_tensor(self.kernel_dimensions, self.stencil_size, device=self.belief_state.device)
         self.padding = (kernel.shape[-2] // 2, kernel.shape[-1] // 2)
         self.diffusion_kernel = kernel.unsqueeze(0).unsqueeze(0)
         self.diffusion_kernel.to(self.belief_state.device)
