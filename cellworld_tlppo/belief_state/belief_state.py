@@ -1,9 +1,9 @@
+import math
 import typing
 import torch
-from shapely import Polygon, Point
 from .belief_state_component import BeliefStateComponent
 from .utils import get_index, gaussian_tensor
-from cellworld_game import CoordinateConverter
+from cellworld_game import CoordinateConverter, Polygon
 
 
 class BeliefState(object):
@@ -19,36 +19,41 @@ class BeliefState(object):
         else:
             self.device = torch.device("cpu")  # Set device to CPU
         if other_size == 0:
-            other_size = definition // 40
+            other_size = max(definition // 40, 2)
+        self.rendered = False
         self.other_size = other_size
         self.arena = arena
         self.occlusions = occlusions
-        self.min_x, self.min_y, self.max_x, self.max_y = arena.bounds
+        self.min_x, self.min_y, self.max_x, self.max_y = arena.bounds()
         self.definition = definition
         self.granularity = (self.max_x - self.min_x) / definition
         self.y_steps = int((self.max_y - self.min_y) // self.granularity)
-        self.map = torch.zeros((self.definition, self.y_steps), device=self.device)
-        self.probability_distribution = torch.zeros(self.definition, self.y_steps, device=self.device)
-        self.points = [[None for _ in range(self.y_steps)] for _ in range(self.definition)]
-        points_list = []
-        for i in range(self.definition):
-            x = (i * self.granularity) + self.min_x
-            for j in range(self.y_steps):
-                y = (j * self.granularity) + self.min_y
-                points_list.append((x,y))
-                point = Point(x, y)
-                self.points[i][j] = point
-                if self.arena.contains(point):
-                    for occlusion in self.occlusions:
-                        if occlusion.contains(point):
-                            self.map[i, j] = 0
-                            break
-                    else:
-                        self.probability_distribution[i, j] = 1.0
-                        self.map[i, j] = 1
-                else:
-                    self.map[i, j] = 0
-        self.points_tensor = torch.tensor(points_list, device=self.device)
+        self.shape = (self.y_steps, self.definition)
+        self.size = self.y_steps * self.definition
+        self.points = torch.zeros((self.size, 2),
+                                  dtype=torch.float32,
+                                  device=self.device)
+        index = 0
+        for j in range(self.y_steps):
+            y = (j * self.granularity) + self.min_y + self.granularity / 2
+            for i in range(self.definition):
+                x = (i * self.granularity) + self.min_x + self.granularity / 2
+                self.points[index][0] = x
+                self.points[index][1] = y
+                index += 1
+
+        self.map = torch.zeros(self.shape,
+                               device=self.device,
+                               dtype=torch.float32)
+
+        inside_arena = self.arena.contains(self.points)
+        inside_arena_matrix = torch.reshape(inside_arena, self.shape)
+        self.map[inside_arena_matrix] = 1
+
+        for occlusion in self.occlusions:
+            inside_occlusion = occlusion.contains(self.points)
+            inside_occlusion_matrix = torch.reshape(inside_occlusion, self.shape)
+            self.map[inside_occlusion_matrix] = 0
 
         self.components = components
         for component in self.components:
@@ -61,16 +66,14 @@ class BeliefState(object):
         self.other_visible = False
         self.visibility_polygon = None
         self.time_step = 0
+        self.probability_distribution = self.map.clone()
         self.probability_distribution /= self.probability_distribution.sum()
-
-    def is_point(self, i, j):
-        return self.map[i, j] > -1
 
     def get_location_indices(self, location: tuple):
         x, y = location
         i, low_i, dist_i = get_index(x, self.min_x, self.granularity)
         j, low_j, dist_j = get_index(y, self.min_y, self.granularity)
-        return i, j, low_i, low_j, dist_i, dist_j
+        return j, i, low_j, low_i, dist_j, dist_i
 
     def update_self_location(self, self_location: tuple):
         self.self_location = self_location
@@ -90,7 +93,7 @@ class BeliefState(object):
 
         if self.other_location:
             i, j, _, _, _, _ = self.get_location_indices(self.other_location)
-            other_distribution = gaussian_tensor(dimensions=self.probability_distribution.shape,
+            other_distribution = gaussian_tensor(dimensions=self.shape,
                                                  sigma=self.other_size,
                                                  center=(i, j),
                                                  device=self.device)
@@ -103,11 +106,10 @@ class BeliefState(object):
             for component in self.components:
                 component.on_other_location_update()
         elif self.visibility_polygon:
-            for i in range(self.definition):
-                for j in range(self.y_steps):
-                    if self.map[i, j]:
-                        if self.visibility_polygon.contains(self.points[i][j]):
-                            self.probability_distribution[i, j] = 0
+            in_view = self.visibility_polygon.contains(self.points)
+            in_view_matrix = torch.reshape(in_view, self.shape)
+            self.probability_distribution[in_view_matrix] = 0
+            self.probability_distribution /= self.probability_distribution.sum()
             for component in self.components:
                 component.on_visibility_update()
 
@@ -121,32 +123,27 @@ class BeliefState(object):
         self.visibility_polygon = None
         self.other_location = None
         self.self_location = None
+        self.rendered = False
 
     def render(self, screen, coordinate_converter: CoordinateConverter):
         import pygame
-        prob_matrix = self.probability_distribution.cpu().numpy()
+        prob_matrix = self.probability_distribution
         max_prob = prob_matrix.max()
         if not max_prob:
             return
-        cell_size = 9
-
-        # Get dimensions
-        height, width = prob_matrix.shape
-        screen_width, screen_height = width * cell_size, height * cell_size
-
-        # Precompute color surface for efficiency
+        cell_size = math.floor(coordinate_converter.scale_from_canonical(1 / self.definition)) - 1
         color_surface = pygame.Surface((cell_size, cell_size), pygame.SRCALPHA)
         color_surface.fill((255, 0, 0))
-
-        for i in range(height):
-            for j in range(width):
-                prob = prob_matrix[i, j]
-                alpha = int(255 * (prob / max_prob))
-                color_surface.set_alpha(alpha)
-                x, y = coordinate_converter.from_canonical((self.points[i][j].x, self.points[i][j].y))
-
-                # Blit (copy) the colored surface onto the main screen
-                screen.blit(color_surface, (x - cell_size / 2, y - cell_size / 2))
+        prob_vector = torch.reshape(prob_matrix, (self.size,))
+        for index in range(self.size):
+            prob = prob_vector[index]
+            alpha = int(255 * (prob / max_prob))
+            color_surface.set_alpha(alpha)
+            point = tuple(self.points[index].tolist())
+            x, y = coordinate_converter.from_canonical(point)
+            # Blit (copy) the colored surface onto the main screen
+            cell_location = (x - cell_size / 2, y - cell_size / 2)
+            screen.blit(color_surface, cell_location)
 
     def get_probability(self, location: tuple, radius: float):
         i, j, low_i, low_j, dist_i, dist_j = self.get_location_indices(location)

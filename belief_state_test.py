@@ -8,7 +8,7 @@ bot_evade = BotEvade(world_name="21_05",
                      goal_threshold=.05,
                      time_step=.025,
                      real_time=False,
-                     render=True,
+                     # render=True,
                      use_predator=True)
 
 # save_video_output(bot_evade, ".")
@@ -19,10 +19,10 @@ dc = belief.DirectedDiffusionComponent(.10 / 2.34 * .25)
 bs = belief.BeliefState(arena=bot_evade.arena,
                         occlusions=bot_evade.occlusions,
                         definition=100,
-                        components=[dc, gc])
+                        components=[gc, dc])
 
 
-bot_evade.view.add_render_step(bs.render, z_index=200)
+#bot_evade.view.add_render_step(bs.render, z_index=200)
 bot_evade.reset()
 # prey
 puff_cool_down = 0
@@ -36,6 +36,7 @@ visibility_polygon = bot_evade.visibility.get_visibility_polygon(src=bot_evade.p
 bs.update_visibility(visibility_polygon=visibility_polygon)
 
 bs.tick()
+steps = 0
 while bot_evade.running:
     if bot_evade.time > last_destination_time + 2:
         if bot_evade.goal_achieved or random_actions == 0:
@@ -49,16 +50,18 @@ while bot_evade.running:
         last_destination_time += 2
 
     for i in range(10):
+        steps += 1
         bot_evade.step()
-        # if bot_evade.predator_visible:
-        #     bs.update_other_location(bot_evade.predator.state.location)
-        #     bs.update_self_location(bot_evade.prey.state.location)
+        if bot_evade.predator_visible:
+            bs.update_other_location(bot_evade.predator.state.location)
+            bs.update_self_location(bot_evade.prey.state.location)
 
     visibility_polygon = bot_evade.visibility.get_visibility_polygon(src=bot_evade.prey.state.location,
                                                                      direction=bot_evade.prey.state.direction,
                                                                      view_field=360)
 
     bs.update_visibility(visibility_polygon=visibility_polygon)
-    print(bs.get_probability((.5, .5), .1))
+    # print(bs.get_probability((.5, .5), .1))
     bs.tick()
 
+print(steps)
