@@ -8,7 +8,7 @@ bot_evade = BotEvade(world_name="21_05",
                      goal_threshold=.05,
                      time_step=.025,
                      real_time=False,
-                     # render=True,
+                     render=True,
                      use_predator=True)
 
 # save_video_output(bot_evade, ".")
@@ -22,7 +22,7 @@ bs = belief.BeliefState(arena=bot_evade.arena,
                         components=[gc, dc])
 
 
-#bot_evade.view.add_render_step(bs.render, z_index=200)
+bot_evade.view.add_render_step(bs.render, z_index=200)
 bot_evade.reset()
 # prey
 puff_cool_down = 0

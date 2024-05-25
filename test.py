@@ -1,101 +1,49 @@
-import pulsekit
-r = pulsekit.start_profile()
-import cellworld_tlppo as ct
-import cellworld_gym as cwg
+import pygame
 import numpy as np
-import matplotlib.pyplot as plt
 
-episode = 0
+# Initialize Pygame
+pygame.init()
+width, height = 800, 400
+screen = pygame.display.set_mode((width, height))
+clock = pygame.time.Clock()
 
+# Function to generate heatmap data
+def generate_heatmap_data():
+    return np.random.randint(0, 256, (100, 100), dtype=np.uint8)
 
-def on_episode_end(env: ct.TlppoLearner):
-    return
-    # global episode
-    # episode += 1
-    # if episode % 10:
-    #     return
-    # print('Episode ended.')
-    # import matplotlib.pyplot as plt
-    # lppo, adj_matrix = env.get_lppo()
-    # plt.figure(figsize=(8, 8))
-    # plt.scatter(lppo[:, 0], lppo[:, 1], color='blue', zorder=2)  # Plot nodes
-    # for i in range(adj_matrix.shape[0]):
-    #     for j in range(adj_matrix.shape[1]):
-    #         if adj_matrix[i][j] == 1:
-    #             plt.plot([lppo[i][0], lppo[j][0]], [lppo[i][1], lppo[j][1]], color='black', zorder=1)
-    #
-    # plt.title('Graph Visualization')
-    # plt.grid(True)
-    # plt.show()
+# Function to manually create a red heatmap surface with alpha matching the data values
+def create_red_heatmap_surface(heatmap_data):
+    # Create a surface capable of handling alpha
+    heatmap_surface = pygame.Surface(heatmap_data.shape, pygame.SRCALPHA)
+    pix_array = pygame.PixelArray(heatmap_surface)
 
+    for x in range(100):
+        for y in range(100):
+            value = heatmap_data[x, y]
+            # Set pixel value; format: (Red, Green, Blue, Alpha)
+            pix_array[x, y] = (value, 0, 0, value)
 
-env_learner = ct.TlppoLearner(environment_name="CellworldBotEvade-v0",
-                              on_episode_end=on_episode_end,
-                              tlppo_dim=np.array([True, True, False, False, False, False, False, False, False, False, False]),
-                              world_name="21_05",
-                              use_lppos=False,
-                              use_predator=True,
-                              max_step=200,
-                              time_step=.25,
-                              reward_function=cwg.Reward({}),
-                              real_time=False,
-                              render=False)
+    # Delete the pixel array to unlock the surface
+    del pix_array
 
-step_count = 0
-done = True
-while step_count < 2000:
-    if done:
-        env_learner.reset()
-    _, _, done, _, _ = env_learner.step(env_learner.action_space.sample())
-    step_count += 1
-    if step_count % 100 == 0:
-        print(f"Step: {step_count}")
+    # Scale the surface to the window size
+    return pygame.transform.scale(heatmap_surface, (width, height))
 
+running = True
+while running:
+    screen.fill((255,255,255))
+    for event in pygame.event.get():
+        if event.type is pygame.QUIT:
+            running = False
 
-while not done:
-    _, _, done, _, _ = env_learner.step(len(env_learner.environment.action_list)-1)
+    # Generate new heatmap data
+    heatmap_data = generate_heatmap_data()
 
+    # Update the heatmap display
+    heatmap_surface = create_red_heatmap_surface(heatmap_data)
+    screen.blit(heatmap_surface, (0, 0))
 
-nodes, adj_matrix, centrality_scores, derivative, lppo = env_learner.update_actions(lppo_count=25)
-end_states = np.array(env_learner.end_states)
-print(end_states)
-plt.figure(figsize=(8, 8))
-plt.scatter(nodes[:, 0], nodes[:, 1],  c=derivative, cmap='viridis', zorder=2, marker='o')  # Plot nodes
-plt.scatter(lppo[:, 0], lppo[:, 1],  c="r", zorder=2, marker='o', s=150)  # Plot nodes
-plt.scatter(end_states[:, 0], end_states[:, 1],  c="r", zorder=2, marker='o', s=150)  # Plot nodes
-for i in range(adj_matrix.shape[0]):
-    for j in range(adj_matrix.shape[1]):
-        if adj_matrix[i][j] == 1:
-            plt.plot([nodes[i][0], nodes[j][0]], [nodes[i][1], nodes[j][1]], color='black', zorder=1, alpha=0.3)
+    pygame.display.flip()
+    clock.tick(60)  # Cap at 60 frames per second
 
-# plt.colorbar(label='Centrality Derivative')
-plt.title('Graph Visualization')
-plt.grid(True)
-plt.show()
-
-env_tester = ct.TlppoTester(environment_name="CellworldBotEvade-v0",
-                            lppos=lppo,
-                            end_states=end_states,
-                            world_name="21_05",
-                            use_lppos=False,
-                            use_predator=True,
-                            max_step=200,
-                            time_step=.25,
-                            reward_function=cwg.Reward({}),
-                            real_time=True,
-                            render=True)
-
-print(env_tester.environment.action_list)
-for i in range(100):
-    print(f"Episode {i+1}")
-    env_tester.reset()
-    for j in range(10):
-        action = env_tester.action_space.sample()
-        print(action, env_tester.environment.action_list[action])
-        _, _, done, _, _ = env_tester.step(action)
-        if done:
-            break
-    while not done:
-        action = len(env_tester.environment.action_list)-1
-        print(action, env_tester.environment.action_list[action])
-        _, _, done, _, _ = env_tester.step(action)
+pygame.quit()

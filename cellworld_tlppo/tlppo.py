@@ -4,18 +4,24 @@ import typing
 
 from .graph import Graph
 from .mcts import Tree, TreeNode
-from .belief_state import BeliefState
+from .belief_state import BeliefState, DirectedDiffusionComponent, GaussianDiffusionComponent
 
 
 class TLPPO:
     def __init__(self,
                  graph: Graph,
-                 belief_states: typing.Dict[str, BeliefState],
+                 robot_belief_state: BeliefState,
                  reward_fn: typing.Callable[[tuple, typing.Dict[str,BeliefState]], float],
                  budget: int = 100,
                  depth: int = 20,
                  ):
-        self.belief_states = belief_states
+        gc = GaussianDiffusionComponent(2.0 / 2.34 * .25)
+        dc = DirectedDiffusionComponent(.4 / 2.34 * .25)
+        self.self_belief_state = BeliefState(robot_belief_state.arena,
+                                             robot_belief_state.occlusions,
+                                             definition=100,
+                                             components=[gc, dc])
+        self.robot_belief_state = robot_belief_state
         self.graph = graph
         self.budget = budget
         self.depth = depth

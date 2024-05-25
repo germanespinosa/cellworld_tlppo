@@ -125,26 +125,6 @@ class BeliefState(object):
         self.self_location = None
         self.rendered = False
 
-    def render(self, screen, coordinate_converter: CoordinateConverter):
-        import pygame
-        prob_matrix = self.probability_distribution
-        max_prob = prob_matrix.max()
-        if not max_prob:
-            return
-        cell_size = math.floor(coordinate_converter.scale_from_canonical(1 / self.definition)) - 1
-        color_surface = pygame.Surface((cell_size, cell_size), pygame.SRCALPHA)
-        color_surface.fill((255, 0, 0))
-        prob_vector = torch.reshape(prob_matrix, (self.size,))
-        for index in range(self.size):
-            prob = prob_vector[index]
-            alpha = int(255 * (prob / max_prob))
-            color_surface.set_alpha(alpha)
-            point = tuple(self.points[index].tolist())
-            x, y = coordinate_converter.from_canonical(point)
-            # Blit (copy) the colored surface onto the main screen
-            cell_location = (x - cell_size / 2, y - cell_size / 2)
-            screen.blit(color_surface, cell_location)
-
     def get_probability(self, location: tuple, radius: float):
         i, j, low_i, low_j, dist_i, dist_j = self.get_location_indices(location)
         r = int(radius * self.definition)
@@ -164,3 +144,24 @@ class BeliefState(object):
         stencil = (distance <= r).float()
 
         return float((self.probability_distribution[i - r: i - r + size, j - r: j - r + size] * stencil).sum())
+
+    def render(self, screen, coordinate_converter: CoordinateConverter):
+        import pygame
+        # Create a surface capable of handling alpha
+        values = (self.probability_distribution * 255 / self.probability_distribution.max()).int().cpu().numpy()
+        heatmap_surface = pygame.Surface(values.shape[::-1], pygame.SRCALPHA)
+        pix_array = pygame.PixelArray(heatmap_surface)
+        for y in range(values.shape[1]):
+            for x in range(values.shape[0]):
+                value = values[values.shape[0] - x - 1, y]
+                pix_array[y, x] = (255, 0, 0, value)
+
+        # Delete the pixel array to unlock the surface
+        del pix_array
+
+        # Scale the surface to the window size
+        scaled_heatmap = pygame.transform.scale(heatmap_surface,
+                                                size=(coordinate_converter.screen_width,
+                                                      coordinate_converter.screen_height))
+        screen.blit(scaled_heatmap, (0, 0))
+
