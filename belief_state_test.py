@@ -14,7 +14,7 @@ bot_evade = BotEvade(world_name="21_05",
 # save_video_output(bot_evade, ".")
 
 gc = belief.GaussianDiffusionComponent(.25 / 2.34 * .25)
-dc = belief.DirectedDiffusionComponent(.10 / 2.34 * .25)
+dc = belief.DirectedDiffusionComponent(.20 / 2.34 * .25)
 
 bs = belief.BeliefState(arena=bot_evade.arena,
                         occlusions=bot_evade.occlusions,
@@ -37,8 +37,9 @@ bs.update_visibility(visibility_polygon=visibility_polygon)
 
 bs.tick()
 steps = 0
+tim_between_actions = 5
 while bot_evade.running:
-    if bot_evade.time > last_destination_time + 2:
+    if bot_evade.time > last_destination_time + tim_between_actions:
         if bot_evade.goal_achieved or random_actions == 0:
             destination = bot_evade.goal_location
             random_actions = 50
@@ -47,7 +48,7 @@ while bot_evade.running:
             destination = random.choice(bot_evade.loader.open_locations)
 
         bot_evade.prey.set_destination(destination)
-        last_destination_time += 2
+        last_destination_time += tim_between_actions
 
     for i in range(10):
         steps += 1
