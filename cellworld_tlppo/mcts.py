@@ -2,8 +2,9 @@ import random
 import math
 import sys
 import typing
-from .state import State
+import cellworld_game as cg
 from .graph import Graph
+from .state import State
 
 
 class TreeNode(object):
@@ -14,12 +15,14 @@ class TreeNode(object):
                  graph: Graph,
                  parent: "TreeNode" = None):
         self.label: int = label
-        self.state: State = state
+        self.state = state
         self.graph: Graph = graph
         self.parent: TreeNode = parent
         self.children: typing.List[TreeNode] = []
         self.value: float = 0.0
         self.visits: int = 0
+        self.step_reward: float = 0
+        self.remaining_step: float = 0
 
     def ucb1(self,
              c: float = math.sqrt(2)) -> float:
@@ -87,7 +90,25 @@ class TreeNode(object):
 
 class Tree(object):
 
-    def __init__(self, graph: Graph, values: typing.Tuple[float, ...]):
+    def __init__(self,
+                 graph: Graph,
+                 point: cg.Point.type,
+                 visibility: cg.Visibility):
         self.graph: Graph = graph
-        state = State(values=values)
-        self.root = TreeNode(state=state, graph=self.graph, parent=None, label=-1)
+        state = State(point=point)
+        self.root = TreeNode(state=state,
+                             graph=self.graph,
+                             parent=None,
+                             label=-1)
+        polygon = visibility.get_visibility_polygon(src=point,
+                                                    direction=0,
+                                                    view_field=360)
+        visible_nodes = polygon.contains(self.graph.nodes_tensor)
+        for (label, node), is_visible in zip(graph.nodes.items(), visible_nodes):
+            if not graph.edges[label]:
+                continue
+            if is_visible:
+                self.root.children.append(TreeNode(graph=graph,
+                                                   label=node.label,
+                                                   state=node.state,
+                                                   parent=self.root))

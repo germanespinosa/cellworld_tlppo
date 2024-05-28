@@ -43,22 +43,25 @@ class BeliefState(object):
                 index += 1
 
         self.map = torch.zeros(self.shape,
-                               device=self.device,
-                               dtype=torch.float32)
+                               dtype=torch.float32,
+                               device=self.device)
 
         inside_arena = self.arena.contains(self.points)
         inside_arena_matrix = torch.reshape(inside_arena, self.shape)
         self.map[inside_arena_matrix] = 1
-
         for occlusion in self.occlusions:
             inside_occlusion = occlusion.contains(self.points)
             inside_occlusion_matrix = torch.reshape(inside_occlusion, self.shape)
             self.map[inside_occlusion_matrix] = 0
 
+        self.visibility_map = torch.ones(self.shape,
+                                         dtype=torch.float32,
+                                         device=self.device)
+
         self.components = components
         for component in self.components:
             component.set_belief_state(self)
-            component.on_belief_state_set()
+            component.on_belief_state_set(belief_state=self)
         self.self_indices = None
         self.other_indices = None
         self.self_location = None
@@ -89,7 +92,9 @@ class BeliefState(object):
             i, j, _, _, _, _ = self.get_location_indices(self.self_location)
             self.self_indices = (i, j)
             for component in self.components:
-                component.on_self_location_update()
+                component.on_self_location_update(self.self_location,
+                                                  self.self_indices,
+                                                  self.time_step)
 
         if self.other_location:
             i, j, _, _, _, _ = self.get_location_indices(self.other_location)
@@ -104,17 +109,24 @@ class BeliefState(object):
             self.other_indices = (i, j)
             self.other_visible = True
             for component in self.components:
-                component.on_other_location_update()
+                component.on_other_location_update(self.other_location,
+                                                   self.other_indices,
+                                                   self.time_step)
         elif self.visibility_polygon:
             in_view = self.visibility_polygon.contains(self.points)
             in_view_matrix = torch.reshape(in_view, self.shape)
-            self.probability_distribution[in_view_matrix] = 0
+            self.visibility_map.fill_(1)
+            self.visibility_map[in_view_matrix] = 0
+            self.probability_distribution *= self.visibility_map
             self.probability_distribution /= self.probability_distribution.sum()
             for component in self.components:
-                component.on_visibility_update()
+                component.on_visibility_update(self.visibility_polygon,
+                                               self.visibility_map,
+                                               self.time_step)
 
         for component in self.components:
-            component.on_tick()
+            component.on_tick(self.probability_distribution,
+                              self.time_step)
             self.probability_distribution *= self.map
             self.probability_distribution /= self.probability_distribution.sum()
 
@@ -124,26 +136,6 @@ class BeliefState(object):
         self.other_location = None
         self.self_location = None
         self.rendered = False
-
-    def get_probability(self, location: tuple, radius: float):
-        i, j, low_i, low_j, dist_i, dist_j = self.get_location_indices(location)
-        r = int(radius * self.definition)
-
-        size = 2 * r + 1
-        center = r  # The center index
-
-        # Create a grid of indices
-        y, x = torch.meshgrid(torch.arange(size, device=self.device),
-                              torch.arange(size, device=self.device),
-                              indexing='ij')
-
-        # Compute the distance from the center for each index
-        distance = torch.sqrt((x - center) ** 2 + (y - center) ** 2)
-
-        # Create the tensor with values 1 where the distance is less than or equal to r
-        stencil = (distance <= r).float()
-
-        return float((self.probability_distribution[i - r: i - r + size, j - r: j - r + size] * stencil).sum())
 
     def render(self, screen, coordinate_converter: CoordinateConverter):
         import pygame
@@ -165,3 +157,19 @@ class BeliefState(object):
                                                       coordinate_converter.screen_height))
         screen.blit(scaled_heatmap, (0, 0))
 
+    def predict(self, num_steps: int) -> torch.Tensor:
+        predictions = torch.zeros((num_steps, self.shape[0], self.shape[1]),
+                                  device=self.device,
+                                  dtype=torch.float32)
+        probability_distribution = self.probability_distribution
+        for i in range(num_steps):
+            time_step = self.time_step + 1
+            predictions[i, :, :] = probability_distribution
+            probability_distribution = predictions[i, :, :]
+            for component in self.components:
+                component.predict(probability_distribution=probability_distribution,
+                                  time_step=time_step)
+                probability_distribution *= self.map
+                probability_distribution /= self.probability_distribution.sum()
+
+        return predictions

@@ -14,15 +14,18 @@ class GaussianDiffusionComponent(BeliefStateComponent):
         self.padding = None
         self.kernel_dimensions = None
 
-    def on_belief_state_set(self):
-        self.stencil_size = math.ceil(self.diffusion_rate / self.belief_state.granularity)
+    def on_belief_state_set(self,
+                            belief_state: "BeliefState"):
+        self.stencil_size = math.ceil(self.diffusion_rate / belief_state.granularity)
         self.kernel_dimensions = (self.stencil_size * 2 + 1, self.stencil_size * 2 + 1)
-        kernel = gaussian_tensor(self.kernel_dimensions, self.stencil_size, device=self.belief_state.device)
+        kernel = gaussian_tensor(self.kernel_dimensions, self.stencil_size, device=belief_state.device)
         self.padding = (kernel.shape[-2] // 2, kernel.shape[-1] // 2)
         self.diffusion_kernel = kernel.unsqueeze(0).unsqueeze(0)
-        self.diffusion_kernel.to(self.belief_state.device)
+        self.diffusion_kernel.to(belief_state.device)
 
-    def predict(self, probability_distribution: torch.tensor):
+    def predict(self,
+                probability_distribution: torch.tensor,
+                time_step: int) -> None:
         convoluted = F.conv2d(probability_distribution.unsqueeze(0).unsqueeze(0),
                               self.diffusion_kernel,
                               padding=self.padding).squeeze(0).squeeze(0)
