@@ -72,6 +72,11 @@ class BeliefState(object):
         self.probability_distribution = self.map.clone()
         self.probability_distribution /= self.probability_distribution.sum()
 
+    def reset(self):
+        self.time_step = 0
+        self.probability_distribution = self.map.clone()
+        self.probability_distribution /= self.probability_distribution.sum()
+
     def get_location_indices(self, location: tuple):
         x, y = location
         i, low_i, dist_i = get_index(x, self.min_x, self.granularity)
@@ -79,7 +84,7 @@ class BeliefState(object):
         return j, i, low_j, low_i, dist_j, dist_i
 
     def update_self_location(self, self_location: tuple):
-        self.self_location = self_location
+            self.self_location = self_location
 
     def update_visibility(self, visibility_polygon: Polygon):
         self.visibility_polygon = visibility_polygon

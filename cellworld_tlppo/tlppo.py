@@ -3,9 +3,10 @@ import typing
 import torch
 import cellworld_game as cg
 from .graph import Graph
-from .mcts import Tree, TreeNode
+from .mcts import Tree
 from .belief_state import BeliefState
 from .steps import Steps
+import pulsekit
 
 
 class TLPPO:
@@ -34,6 +35,7 @@ class TLPPO:
                               indexing='ij')
         distance = torch.sqrt((x - self.probability_radius) ** 2 + (y - self.probability_radius) ** 2)
         self.probability_stencil = (distance <= self.probability_radius).float()
+        self.last_action = None
 
     def __get_probability__(self,
                             probability_distribution: torch.Tensor,
@@ -74,43 +76,50 @@ class TLPPO:
         return float((probability_section * stencil_section).sum())
 
     def get_action(self,
-                   location: cg.Point.type,
+                   point: typing.Tuple[float, float],
                    exploration: float = math.sqrt(2),
-                   discount: float = .1) -> cg.Point.type:
+                   discount: float = .1):
+        # with pulsekit.CodeBlock("belief state evolution"):
+        #     robot_belief_state_evolution = self.robot_belief_state.predict(num_steps=self.depth)
+        with pulsekit.CodeBlock("mcts"):
+            tree = Tree(graph=self.graph,
+                        point=point)
 
-        robot_belief_state_evolution = self.robot_belief_state.predict(num_steps=self.depth)
-        tree = Tree(graph=self.graph,
-                    visibility=self.visibility,
-                    point=location)
-
-        for i in range(self.budget):
-            node = tree.root
-            src = node.state.point
-            step_count = 0
-            step_remainder = 0
-            while step_count < self.depth:
-                step_reward = 0
-                node = node.select(c=exploration)
-                dst = node.state.point
+            for i in range(self.budget):
+                node = tree.root
+                src = node.state.point
+                step_count = 0
+                step_remainder = 0
+                iteration_reward = 0
                 _continue = True
-                path = self.navigation.get_path(src=src,
-                                                dst=dst)
-                steps = Steps(start=src,
-                              stops=path,
-                              step_size=self.speed,
-                              pending=step_remainder)
-                for step in steps:
-                    if node.visits == 0:
-                        robot_probability = self.__get_probability__(probability_distribution=robot_belief_state_evolution[step_count, :, :],
-                                                                     location=step)
-                        node.step_reward, _continue = self.reward_fn(step,
-                                                                     robot_probability)
-                    step_reward += node.step_reward
-                    step_count += 1
-                    if not _continue or step_count == self.depth:
-                        break
-                step_remainder = steps.pending
-                node.propagate_reward(reward=step_reward, discount=discount)
-        selected_node = tree.root.select(0)
-        print(selected_node.step_reward, selected_node.value)
-        return selected_node.state.point
+                while step_count < self.depth and _continue:
+                    if self.last_action:
+                        node = node.select_by_label(label=self.last_action, c=exploration)
+                        self.last_action = None
+                    else:
+                        node = node.select(c=exploration)
+                    dst = node.state.point
+                    path = self.navigation.get_path(src=src,
+                                                    dst=dst)
+                    steps = Steps(start=src,
+                                  stops=path,
+                                  step_size=self.speed,
+                                  pending=step_remainder)
+                    for step in steps:
+                        if node.visits == 0:
+                            # robot_probability = self.__get_probability__(probability_distribution=robot_belief_state_evolution[step_count, :, :],
+                            #                                              location=step)
+                            robot_probability = self.__get_probability__(probability_distribution=self.robot_belief_state.probability_distribution,
+                                                                         location=step)
+                            node.step_reward, _continue = self.reward_fn(step,
+                                                                         robot_probability)
+                        iteration_reward += node.step_reward
+                        step_count += 1
+                        if not _continue or step_count == self.depth:
+                            break
+                    step_remainder = steps.pending
+                print(step_count)
+                node.propagate_reward(reward=iteration_reward,
+                                      discount=discount)
+        self.last_action = tree.root.select(0).label
+        return tree

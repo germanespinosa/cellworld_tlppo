@@ -5,7 +5,7 @@ import typing
 import cellworld_game as cg
 from .graph import Graph
 from .state import State
-
+import math
 
 class TreeNode(object):
 
@@ -19,7 +19,7 @@ class TreeNode(object):
         self.graph: Graph = graph
         self.parent: TreeNode = parent
         self.children: typing.List[TreeNode] = []
-        self.value: float = 0.0
+        self.value: float = -math.inf
         self.visits: int = 0
         self.step_reward: float = 0
         self.remaining_step: float = 0
@@ -27,7 +27,7 @@ class TreeNode(object):
     def ucb1(self,
              c: float = math.sqrt(2)) -> float:
         if self.visits > 0:
-            expected_reward = self.value / self.visits
+            expected_reward = self.value
         else:
             expected_reward = 0
         if c:
@@ -52,6 +52,19 @@ class TreeNode(object):
                              parent=self)
             self.children.append(child)
 
+    def select_by_label(self,
+                        label: int,
+                        c: float) -> "TreeNode":
+
+        if not self.children:
+            self.expand()
+
+        for child in self.children:
+            if child.label == label:
+                return child
+
+        return self.select(c=c)
+
     def select(self,
                c: float) -> "TreeNode":
 
@@ -74,8 +87,10 @@ class TreeNode(object):
     def propagate_reward(self,
                          reward: float,
                          discount: float):
-        self.value += reward
         self.visits += 1
+        if reward < self.value:
+            return
+        self.value = reward
         if self.parent:
             self.parent.propagate_reward(reward=reward * (1-discount),
                                          discount=discount)
@@ -92,23 +107,17 @@ class Tree(object):
 
     def __init__(self,
                  graph: Graph,
-                 point: cg.Point.type,
-                 visibility: cg.Visibility):
+                 point: cg.Point.type):
         self.graph: Graph = graph
         state = State(point=point)
         self.root = TreeNode(state=state,
                              graph=self.graph,
                              parent=None,
                              label=-1)
-        polygon = visibility.get_visibility_polygon(src=point,
-                                                    direction=0,
-                                                    view_field=360)
-        visible_nodes = polygon.contains(self.graph.nodes_tensor)
-        for (label, node), is_visible in zip(graph.nodes.items(), visible_nodes):
-            if not graph.edges[label]:
-                continue
-            if is_visible:
-                self.root.children.append(TreeNode(graph=graph,
-                                                   label=node.label,
-                                                   state=node.state,
-                                                   parent=self.root))
+        closest_node = self.graph.get_nearest(point=point)
+        for label in self.graph.edges[closest_node.label]:
+            node = self.graph.nodes[label]
+            self.root.children.append(TreeNode(graph=graph,
+                                               label=node.label,
+                                               state=node.state,
+                                               parent=self.root))

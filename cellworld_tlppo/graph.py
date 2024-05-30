@@ -13,13 +13,16 @@ class GraphNode(object):
 
 
 class Graph(object):
-    def __init__(self):
+    def __init__(self, nodes: typing.Dict[int, State]):
         self.nodes: typing.Dict[int, GraphNode] = dict()
         self.edges: typing.Dict[int, typing.Dict[int, typing.List[int]]] = dict()
         self.costs: typing.Dict[int, typing.Dict[int, float]] = dict()
         self.next_label = 0
         self._nodes_tensor = None
         self._nodes_labels_tensor = None
+        if nodes:
+            for label, state in nodes.items():
+                self.add_node(state=state, label=label)
 
     @property
     def nodes_tensor(self):
