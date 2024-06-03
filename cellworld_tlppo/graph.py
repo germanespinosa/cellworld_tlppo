@@ -1,6 +1,6 @@
 import typing
 from .state import State
-from cellworld_game import Point
+from cellworld_game import Point, Points
 from cellworld_game.torch.device import default_device
 import torch
 
@@ -18,31 +18,25 @@ class Graph(object):
         self.edges: typing.Dict[int, typing.Dict[int, typing.List[int]]] = dict()
         self.costs: typing.Dict[int, typing.Dict[int, float]] = dict()
         self.next_label = 0
-        self._nodes_tensor = None
-        self._nodes_labels_tensor = None
+        self._nodes_points = None
+        self._nodes_labels = None
         if nodes:
             for label, state in nodes.items():
                 self.add_node(state=state, label=label)
 
     @property
-    def nodes_tensor(self):
-        if self._nodes_tensor is None:
-            self._nodes_tensor = torch.tensor([node.state.point
-                                               for label, node
-                                               in self.nodes.items()],
-                                              dtype=torch.float32,
-                                              device=default_device)
-        return self._nodes_tensor
+    def nodes_points(self):
+        if self._nodes_points is None:
+            self._nodes_points = Points(point_list=[node.state.point
+                                                    for label, node
+                                                    in self.nodes.items()])
+        return self._nodes_points
 
     @property
-    def nodes_labels_tensor(self):
-        if self._nodes_labels_tensor is None:
-            self._nodes_labels_tensor = torch.tensor([label
-                                                      for label
-                                                      in self.nodes],
-                                                     dtype=torch.int,
-                                                     device=default_device)
-        return self._nodes_labels_tensor
+    def nodes_labels(self):
+        if self._nodes_labels is None:
+            self._nodes_labels = [label for label in self.nodes]
+        return self._nodes_labels
 
     def add_node(self, state: State, label: int = None) -> GraphNode:
         if label is None:
@@ -56,7 +50,7 @@ class Graph(object):
         self.nodes[label] = node
         self.edges[label] = dict()
         self.costs[label] = dict()
-        self._nodes_tensor = None
+        self._nodes_points = None
         self._nodes_labels_tensor = None
         return node
 
@@ -174,12 +168,6 @@ class Graph(object):
         return path
 
     def get_nearest(self, point: Point.type) -> GraphNode:
-        labels = self.nodes_labels_tensor
-        nodes = self.nodes_tensor
-        point_tensor = torch.tensor(point,
-                                    dtype=torch.float32,
-                                    device=default_device)
-        distances = torch.norm(nodes - point_tensor, dim=1)
-        closest_index = torch.argmin(distances)
-        closest_id = labels[closest_index].item()
-        return self.nodes[closest_id]
+        closest_index = self.nodes_points.closest(point)
+        closest_label = self.nodes_labels[closest_index]
+        return self.nodes[closest_label]

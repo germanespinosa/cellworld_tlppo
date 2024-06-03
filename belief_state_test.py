@@ -49,7 +49,8 @@ for src_label, cnn in enumerate(env.model.loader.options_graph):
 
 def reward_function(point, puff_probability):
     distance_to_goal = Point.distance(src=point, dst=(1.0, 0.5))
-    return -distance_to_goal - puff_probability * 100, distance_to_goal > env.model.goal_threshold
+
+    return - puff_probability * 1000, distance_to_goal > env.model.goal_threshold
     # return -distance_to_goal, distance_to_goal > env.model.goal_threshold
 
 
@@ -58,15 +59,15 @@ algo = ct.TLPPO(graph=connection_graph,
                 robot_belief_state=bs,
                 reward_fn=reward_function,
                 visibility=env.model.visibility,
-                depth=5,
-                budget=100,
+                depth=2,
+                budget=200,
                 speed=env.model.prey.max_forward_speed * env.time_step,
                 navigation=env.loader.navigation)
 
-save_video_output(model=env.model, video_folder="./videos")
+# save_video_output(model=env.model, video_folder="./videos")
 
 bs.tick()
-for i in range(100):
+for i in range(10):
     print(i)
     obs, _ = env.reset()
     bs.reset()
@@ -82,6 +83,6 @@ for i in range(100):
                                                                              view_field=360)
             bs.update_visibility(visibility_polygon=visibility_polygon)
         bs.tick()
-        tree = algo.get_action(point=prey_location, discount=.4)
+        tree = algo.get_action(point=prey_location, discount=.5)
         action = tree.root.select(0).label
         obs, reward, finished, truncated, info = env.step(action=action)

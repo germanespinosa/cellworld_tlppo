@@ -118,7 +118,6 @@ class TLPPO:
                         if not _continue or step_count == self.depth:
                             break
                     step_remainder = steps.pending
-                print(step_count)
                 node.propagate_reward(reward=iteration_reward,
                                       discount=discount)
         self.last_action = tree.root.select(0).label
