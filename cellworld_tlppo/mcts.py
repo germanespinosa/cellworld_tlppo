@@ -7,6 +7,7 @@ from .graph import Graph
 from .state import State
 import math
 
+
 class TreeNode(object):
 
     def __init__(self,
@@ -23,6 +24,7 @@ class TreeNode(object):
         self.visits: int = 0
         self.step_reward: float = 0
         self.remaining_step: float = 0
+        self.data = None
 
     def ucb1(self,
              c: float = math.sqrt(2)) -> float:

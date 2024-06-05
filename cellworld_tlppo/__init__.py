@@ -5,6 +5,8 @@ from .state import State, StateList
 from .steps import Steps
 from .graph import Graph
 from .tlppo import TLPPO
+from .mcts import Tree, TreeNode
+
 
 register(
     id='TlppoWrapper-v0',

@@ -57,7 +57,7 @@ class Graph(object):
     def __getitem__(self, label: int) -> GraphNode:
         return self.nodes[label]
 
-    def connect(self, src_label: int, dst_label: int, path: typing.List[int] = None):
+    def connect(self, src_label: int, dst_label: int, path: typing.List[int] = None, bi: bool = True):
         if src_label not in self.nodes:
             raise KeyError('source label does not exist')
         if dst_label not in self.nodes:
@@ -72,8 +72,9 @@ class Graph(object):
                 prev_step = step
             self.costs[src_label][dst_label] = cost
             self.edges[src_label][dst_label] = path
-            self.edges[dst_label][src_label] = [i for i in path[::-1]]
-            self.costs[dst_label][src_label] = cost
+            if bi:
+                self.edges[dst_label][src_label] = [i for i in path[::-1]]
+                self.costs[dst_label][src_label] = cost
 
     def get_centrality(self, depth: int = 3) -> typing.Dict[int, float]:
         max_iter = depth
