@@ -10,12 +10,15 @@ class DirectedDiffusionComponent(BeliefStateComponent):
     def __init__(self, speed_rate: float):
         BeliefStateComponent.__init__(self)
         self.speed_rate = speed_rate
-        self.stencil_size = None
         self.start_time_step = 0
         self.end_time_step = 0
         self.step_distance = None
         self.source = None
         self.step = None
+
+    def on_reset(self):
+        self.start_time_step = 0
+        self.end_time_step = 0
 
     def on_belief_state_set(self,
                             belief_state: "BeliefState"):

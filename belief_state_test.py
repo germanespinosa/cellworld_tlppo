@@ -2,7 +2,6 @@ import cellworld_gym as cg
 from cellworld_game import save_video_output, Point, CoordinateConverter
 import cellworld_tlppo.belief_state as belief
 import cellworld_tlppo as ct
-import cellworld as cw
 
 
 env = cg.BotEvadeEnv(world_name="21_05",
@@ -13,21 +12,17 @@ env = cg.BotEvadeEnv(world_name="21_05",
 
 
 save_video_output(env.model, "./videos")
-
-gc = belief.GaussianDiffusionComponent(.30 / 2.34 * .25)
-dc = belief.DirectedDiffusionComponent(.20 / 2.34 * .25)
+nobsc = belief.NoBeliefStateComponent()
+losc = belief.LineOfSightComponent(other_size=.02)
+vc = belief.VisibilityComponent()
+dc = belief.DiffusionComponent(diffusion_rate=env.model.predator.max_forward_speed * env.time_step)
+gdc = belief.GaussianDiffusionComponent(diffusion_rate=env.model.predator.max_forward_speed * env.time_step)
+ddc = belief.DirectedDiffusionComponent(speed_rate=env.model.predator.max_forward_speed * env.time_step)
+mc = belief.MapComponent(occlusions=env.model.occlusions)
 
 bs = belief.BeliefState(arena=env.model.arena,
-                        occlusions=env.model.occlusions,
                         definition=100,
-                        components=[gc, dc],
-                        other_size=6)
-
-obs: cg.BotEvadeObservation
-# prey
-puff_cool_down = 0
-last_destination_time = -3
-random_actions = 50
+                        components=[vc, losc])
 
 connection_graph = ct.Graph(nodes={label: ct.State(point)
                                    for label, point
@@ -50,8 +45,8 @@ algo = ct.TLPPO(graph=connection_graph,
                 robot_belief_state=bs,
                 reward_fn=reward_function,
                 visibility=env.model.visibility,
-                depth=2,
-                budget=50,
+                depth=1,
+                budget=10,
                 speed=env.model.prey.max_forward_speed * env.time_step,
                 navigation=env.loader.navigation)
 
@@ -66,7 +61,6 @@ if env.model.render:
     def get_probability(a, b):
         print(f" {b} - probability: ", algo.robot_belief_state.get_probability_in_radius(point=b,
                                                                                          radius=env.model.puff_threshold))
-
 
     env.model.view.add_render_step(bs.render, z_index=5)
     env.model.view.on_mouse_button_up = get_probability

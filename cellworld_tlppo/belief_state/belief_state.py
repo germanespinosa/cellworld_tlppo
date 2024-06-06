@@ -3,7 +3,7 @@ import typing
 import cellworld_game
 import torch
 from .belief_state_component import BeliefStateComponent
-from .utils import get_index, gaussian_tensor
+from .utils import get_index
 from cellworld_game import CoordinateConverter, Polygon
 
 
@@ -11,20 +11,14 @@ class BeliefState(object):
 
     def __init__(self,
                  arena: Polygon,
-                 occlusions: typing.List[Polygon],
                  definition: int,
-                 components: typing.List[BeliefStateComponent],
-                 other_size: int = 0):
+                 components: typing.List[BeliefStateComponent]):
         if torch.cuda.is_available():
             self.device = torch.device("cuda")  # Set device to GPU
         else:
             self.device = torch.device("cpu")  # Set device to CPU
-        if other_size == 0:
-            other_size = max(definition // 40, 2)
         self.rendered = False
-        self.other_size = other_size
         self.arena = arena
-        self.occlusions = occlusions
         self.min_x, self.min_y, self.max_x, self.max_y = arena.bounds()
         self.definition = definition
         self.granularity = (self.max_x - self.min_x) / definition
@@ -43,22 +37,6 @@ class BeliefState(object):
                 self.points[index][1] = y
                 index += 1
 
-        self.map = torch.zeros(self.shape,
-                               dtype=torch.float32,
-                               device=self.device)
-
-        inside_arena = self.arena.contains(self.points)
-        inside_arena_matrix = torch.reshape(inside_arena, self.shape)
-        self.map[inside_arena_matrix] = 1
-        for occlusion in self.occlusions:
-            inside_occlusion = occlusion.contains(self.points)
-            inside_occlusion_matrix = torch.reshape(inside_occlusion, self.shape)
-            self.map[inside_occlusion_matrix] = 0
-
-        self.visibility_map = torch.ones(self.shape,
-                                         dtype=torch.float32,
-                                         device=self.device)
-
         self.components = components
         for component in self.components:
             component.set_belief_state(self)
@@ -70,7 +48,9 @@ class BeliefState(object):
         self.other_visible = False
         self.visibility_polygon = None
         self.time_step = 0
-        self.probability_distribution = self.map.clone()
+        self.probability_distribution = torch.ones(self.shape,
+                                                   dtype=torch.float32,
+                                                   device=self.device)
         self.probability_distribution /= self.probability_distribution.sum()
         self.j_grid, self.i_grid = torch.meshgrid(torch.arange(self.shape[1], device=self.device),
                                                   torch.arange(self.shape[0], device=self.device), indexing='xy')
@@ -148,9 +128,10 @@ class BeliefState(object):
 
     def reset(self):
         self.time_step = 0
-        self.probability_distribution = self.map.clone()
+        self.probability_distribution[:, :] = 1
         self.probability_distribution /= self.probability_distribution.sum()
-
+        for component in self.components:
+            component.on_reset()
     def get_location_indices(self, location: tuple):
         x, y = location
         i, low_i, dist_i = get_index(x, self.min_x, self.granularity)
@@ -177,14 +158,6 @@ class BeliefState(object):
 
         if self.other_location:
             i, j, _, _, _, _ = self.get_location_indices(self.other_location)
-            other_distribution = gaussian_tensor(dimensions=self.shape,
-                                                 sigma=self.other_size,
-                                                 center=(i, j),
-                                                 device=self.device)
-            self.probability_distribution.copy_(other_distribution)
-
-            self.probability_distribution *= self.map
-            self.probability_distribution /= self.probability_distribution.sum()
             self.other_indices = (i, j)
             self.other_visible = True
             for component in self.components:
@@ -192,22 +165,16 @@ class BeliefState(object):
                                                    self.other_indices,
                                                    self.time_step)
         elif self.visibility_polygon:
-            in_view = self.visibility_polygon.contains(self.points)
-            in_view_matrix = torch.reshape(in_view, self.shape)
-            self.visibility_map.fill_(1)
-            self.visibility_map[in_view_matrix] = 0
-            self.probability_distribution *= self.visibility_map
-            self.probability_distribution /= self.probability_distribution.sum()
             for component in self.components:
                 component.on_visibility_update(self.visibility_polygon,
-                                               self.visibility_map,
                                                self.time_step)
 
         for component in self.components:
             component.on_tick(self.probability_distribution,
                               self.time_step)
-            self.probability_distribution *= self.map
-            self.probability_distribution /= self.probability_distribution.sum()
+            total_sum = self.probability_distribution.sum()
+            if total_sum > 0:
+                self.probability_distribution /= total_sum
 
         self.time_step += 1
         self.other_visible = False
@@ -248,7 +215,5 @@ class BeliefState(object):
             for component in self.components:
                 component.predict(probability_distribution=probability_distribution,
                                   time_step=time_step)
-                probability_distribution *= self.map
                 probability_distribution /= probability_distribution.sum()
-
         return predictions

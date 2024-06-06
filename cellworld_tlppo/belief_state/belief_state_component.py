@@ -24,6 +24,9 @@ class BeliefStateComponent(object):
                 time_step: int) -> None:
         raise NotImplementedError
 
+    def on_reset(self) -> None:
+        pass
+
     def on_self_location_update(self,
                                 self_location: cg.Point.type,
                                 self_indices: typing.Tuple[int, int],
@@ -38,7 +41,6 @@ class BeliefStateComponent(object):
 
     def on_visibility_update(self,
                              visibility_polygon: cg.Polygon,
-                             visibility_map: torch.tensor,
                              time_step: int) -> None:
         pass
 
@@ -47,3 +49,10 @@ class BeliefStateComponent(object):
                 time_step: int) -> None:
         self.predict(probability_distribution=probability_distribution,
                      time_step=time_step)
+
+
+class NoBeliefStateComponent(BeliefStateComponent):
+    def predict(self,
+                probability_distribution: torch.tensor,
+                time_step: int) -> None:
+        probability_distribution.fill_(0)
