@@ -37,7 +37,7 @@ class TreeNode(object):
                 if self.visits > 0:
                     exploration = c * math.sqrt(2 * math.log(self.parent.visits) / self.visits)
                 else:
-                    exploration = sys.float_info.max
+                    exploration = math.inf
             else:
                 exploration = 0
         else:
@@ -81,20 +81,35 @@ class TreeNode(object):
         for child in self.children[1:]:
             ucb1 = child.ucb1(c=c)
             if ucb1 > best_ucb1:
+                best_ucb1 = ucb1
                 best_children = [child]
             elif ucb1 == best_ucb1:
                 best_children.append(child)
-        return random.choice(best_children)
+        selected = random.choice(best_children)
+        return selected
+
+    def get_best(self):
+        best_value = None
+        best_child = None
+        for child in self.children:
+            if child.visits == 0:
+                continue
+            if best_value is None:
+                best_value = child.value
+                best_child = child
+            else:
+                if child.value > best_value:
+                    best_value = child.value
+                    best_child = child
+        return best_child
 
     def propagate_reward(self,
                          reward: float,
                          discount: float):
         self.visits += 1
-        if reward < self.value:
-            return
-        self.value = reward
+        self.value = max(reward, self.value)
         if self.parent:
-            self.parent.propagate_reward(reward=reward * (1-discount),
+            self.parent.propagate_reward(reward=self.value * (1-discount),
                                          discount=discount)
 
     def print(self, level: int = 0):

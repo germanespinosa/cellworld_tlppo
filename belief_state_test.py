@@ -14,19 +14,14 @@ env = cg.BotEvadeEnv(world_name="21_05",
 
 save_video_output(env.model, "./videos")
 
-gc = belief.GaussianDiffusionComponent(.25 / 2.34 * .25)
+gc = belief.GaussianDiffusionComponent(.30 / 2.34 * .25)
 dc = belief.DirectedDiffusionComponent(.20 / 2.34 * .25)
 
 bs = belief.BeliefState(arena=env.model.arena,
                         occlusions=env.model.occlusions,
                         definition=100,
                         components=[gc, dc],
-                        other_size=4)
-
-
-def get_probability(a, b):
-    print("probability", algo.__get_probability__(bs.probability_distribution, b))
-
+                        other_size=6)
 
 obs: cg.BotEvadeObservation
 # prey
@@ -46,7 +41,8 @@ for src_label, cnn in enumerate(env.model.loader.options_graph):
 
 def reward_function(point, puff_probability):
     distance_to_goal = Point.distance(src=point, dst=(1.0, 0.5))
-    return -puff_probability, True  # distance_to_goal > env.model.goal_threshold
+    reward = - distance_to_goal * 10 - puff_probability * 1000
+    return reward, distance_to_goal > env.model.goal_threshold
 
 
 algo = ct.TLPPO(graph=connection_graph,
@@ -55,10 +51,9 @@ algo = ct.TLPPO(graph=connection_graph,
                 reward_fn=reward_function,
                 visibility=env.model.visibility,
                 depth=2,
-                budget=100,
+                budget=50,
                 speed=env.model.prey.max_forward_speed * env.time_step,
                 navigation=env.loader.navigation)
-
 
 steps = []
 rewards = []
@@ -67,12 +62,16 @@ tree = None
 show_steps = False
 
 if env.model.render:
+
+    def get_probability(a, b):
+        print(f" {b} - probability: ", algo.robot_belief_state.get_probability_in_radius(point=b,
+                                                                                         radius=env.model.puff_threshold))
+
+
     env.model.view.add_render_step(bs.render, z_index=5)
     env.model.view.on_mouse_button_up = get_probability
 
     def render_graph(surface, coordinate_converter: CoordinateConverter, node: ct.TreeNode = None):
-        if not show_steps:
-            return
         if tree is None:
             return
 
@@ -92,28 +91,63 @@ if env.model.render:
             text_surface = font.render(f'{int(node.value)}', True, (0, 0, 0))
             surface.blit(text_surface, location)
             pygame.draw.circle(surface=surface,
-                               color=(0, 0, 255),
+                               color=(80, 80, 0),
                                center=location,
                                radius=radius,
                                width=2)
             for child in node.children:
+                dst = coordinate_converter.from_canonical(child.state.point)
                 pygame.draw.line(surface,
-                                 (255, 0, 0),
+                                 (120, 120, 0),
                                  location,
-                                 coordinate_converter.from_canonical(child.state.point),
+                                 dst,
                                  2)
-                if child.data:
-                    steps, rewards = child.data
-                    for step, reward in zip(steps, rewards):
-                        text_surface = font.render(f'{int(reward)}', True, (0, 100, 0))
-                        surface.blit(text_surface, location)
-                        location = coordinate_converter.from_canonical(step)
-                        pygame.draw.circle(surface=surface,
-                                           color=(0, 100, 0),
-                                           center=location,
-                                           radius=20,
-                                           width=2)
-                render_graph(surface=surface, coordinate_converter=coordinate_converter, node=child)
+
+                pygame.draw.circle(surface=surface,
+                                   color=(0, 100, 0),
+                                   center=dst,
+                                   radius=20,
+                                   width=2)
+            action_point = coordinate_converter.from_canonical(tree.root.get_best().state.point)
+            pygame.draw.circle(surface=surface,
+                               color=(200, 120, 40),
+                               center=action_point,
+                               radius=radius,
+                               width=5)
+            for child in node.children:
+                dst = coordinate_converter.from_canonical(child.state.point)
+                if child.visits:
+                    text_surface = font.render(f'{int(child.value)}', True, (0, 100, 0))
+                    surface.blit(text_surface, dst)
+                else:
+                    text_surface = font.render('NA', True, (0, 100, 0))
+                    surface.blit(text_surface, dst)
+
+                # if child.data:
+                #     steps, rewards = child.data
+                #     step = steps[0]
+                #     reward = rewards[0]
+                #     location = coordinate_converter.from_canonical(step)
+                #     text_surface = font.render(f'{int(reward)}', True, (0, 0, 0))
+                #     surface.blit(text_surface, location)
+                #
+                #     pygame.draw.circle(surface=surface,
+                #                        color=(120, 120, 0),
+                #                        center=location,
+                #                        radius=20,
+                #                        width=5)
+                # if child.data:
+                #     steps, rewards = child.data
+                #     for step, reward in zip(steps, rewards):
+                #         text_surface = font.render(f'{int(reward)}', True, (0, 100, 0))
+                #         surface.blit(text_surface, location)
+                #         location = coordinate_converter.from_canonical(step)
+                #         pygame.draw.circle(surface=surface,
+                #                            color=(0, 100, 0),
+                #                            center=location,
+                #                            radius=20,
+                #                            width=2)
+                # render_graph(surface=surface, coordinate_converter=coordinate_converter, node=child)
         else:
             pygame.draw.circle(surface=surface,
                                color=(80, 80, 80),
@@ -133,22 +167,27 @@ if env.model.render:
             if node.data:
                 steps, rewards = node.data
 
+        font = pygame.font.Font(None, 20)
+
         pygame.draw.circle(surface=surface,
-                           color=(0, 255, 0),
+                           color=(120, 0, 120),
                            center=coordinate_converter.from_canonical(tree.root.state.point),
                            radius=20,
-                           width=2)
+                           width=5)
 
         for step, reward in zip(steps, rewards):
             location = coordinate_converter.from_canonical(step)
+            text_surface = font.render(f'{int(reward)}', True, (0, 0, 0))
+            surface.blit(text_surface, location)
+
             pygame.draw.circle(surface=surface,
-                               color=(0, 0, 255),
+                               color=(120, 120, 0),
                                center=location,
                                radius=20,
-                               width=2)
+                               width=5)
 
-    # env.model.view.add_render_step(render_steps, z_index=80)
-    env.model.view.add_render_step(render_graph, z_index=85)
+    # env.model.view.add_render_step(render_graph, z_index=205)
+    # env.model.view.add_render_step(render_steps, z_index=90)
 
 bs.tick()
 for i in range(100):
@@ -167,15 +206,11 @@ for i in range(100):
                                                                              direction=0,
                                                                              view_field=360)
             bs.update_visibility(visibility_polygon=visibility_polygon)
-        if env.model.puff_count != puff_count:
-            env.model.puff_count = puff_count
-            show_steps = True
-            env.model.pause()
 
         if not env.model.paused:
             bs.tick()
-            tree = algo.get_action(point=prey_location, discount=0, previous_tree=tree)
-            action = tree.root.select(0).label
+            tree = algo.get_action(point=prey_location, discount=0.0, previous_tree=tree)
+            action = tree.root.get_best().label
             obs, reward, finished, truncated, info = env.step(action=action)
             show_steps = False
         else:

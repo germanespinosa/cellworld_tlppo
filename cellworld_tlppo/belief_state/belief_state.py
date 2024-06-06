@@ -1,5 +1,6 @@
-import math
 import typing
+
+import cellworld_game
 import torch
 from .belief_state_component import BeliefStateComponent
 from .utils import get_index, gaussian_tensor
@@ -71,6 +72,79 @@ class BeliefState(object):
         self.time_step = 0
         self.probability_distribution = self.map.clone()
         self.probability_distribution /= self.probability_distribution.sum()
+        self.j_grid, self.i_grid = torch.meshgrid(torch.arange(self.shape[1], device=self.device),
+                                                  torch.arange(self.shape[0], device=self.device), indexing='xy')
+
+    def get_mask_in_radius(self,
+                           point: cellworld_game.Point.type,
+                           radius: float) -> torch.Tensor:
+
+        i, j, _, _, _, _ = self.get_location_indices(point)
+        max_distance = int(radius * self.definition)
+        distance = torch.sqrt((self.i_grid - i) ** 2 + (self.j_grid - j) ** 2)
+        within_radius = distance <= max_distance
+        return within_radius
+
+    def get_probability_in_radius(self,
+                                  point: cellworld_game.Point.type,
+                                  radius: float,
+                                  probability_distribution: torch.Tensor = None) -> float:
+        if probability_distribution is None:
+            probability_distribution = self.probability_distribution
+
+        within_radius = self.get_mask_in_radius(point=point, radius=radius)
+        return float((probability_distribution * within_radius).sum())
+
+    def get_mask_in_distance_to_segment(self,
+                                        src: cellworld_game.Point.type,
+                                        dst: cellworld_game.Point.type,
+                                        distance: float):
+        i0, j0, _, _, _, _ = self.get_location_indices(src)
+        i1, j1, _, _, _, _ = self.get_location_indices(dst)
+        max_distance = int(distance * self.definition)
+        pi = i1 - i0
+        pj = j1 - j0
+        norm = pi * pi + pj * pj
+        u = ((self.i_grid - i0) * pi + (self.j_grid - j0) * pj) / norm
+        u = torch.clamp(u, 0, 1)
+        x_closest = i0 + u * pi
+        y_closest = j0 + u * pj
+        dist = torch.sqrt((self.i_grid - x_closest) ** 2 + (self.j_grid - y_closest) ** 2)
+        mask = dist <= max_distance
+        return mask
+
+    def get_probability_in_distance_to_segment(self,
+                                               src: cellworld_game.Point.type,
+                                               dst: cellworld_game.Point.type,
+                                               distance: float,
+                                               probability_distribution: torch.Tensor = None):
+
+        if probability_distribution is None:
+            probability_distribution = self.probability_distribution
+
+        within_distance = self.get_mask_in_distance_to_segment(src=src, dst=dst, distance=distance)
+        probability = probability_distribution * within_distance
+
+        # import matplotlib.pyplot as plt
+        # plt.imshow(within_distance.cpu().numpy(), cmap='viridis')  # Convert to NumPy for plotting
+        # plt.colorbar()
+        # plt.title("2D Gaussian Distributed Tensor")
+        # plt.show()
+        # plt.close()
+        #
+        # plt.imshow(probability_distribution.cpu().numpy(), cmap='viridis')  # Convert to NumPy for plotting
+        # plt.colorbar()
+        # plt.title("2D Gaussian Distributed Tensor")
+        # plt.show()
+        # plt.close()
+        #
+        # plt.imshow(probability.cpu().numpy(), cmap='viridis')  # Convert to NumPy for plotting
+        # plt.colorbar()
+        # plt.title("2D Gaussian Distributed Tensor")
+        # plt.show()
+        # plt.close()
+
+        return float(probability.sum())
 
     def reset(self):
         self.time_step = 0
@@ -175,6 +249,6 @@ class BeliefState(object):
                 component.predict(probability_distribution=probability_distribution,
                                   time_step=time_step)
                 probability_distribution *= self.map
-                probability_distribution /= self.probability_distribution.sum()
+                probability_distribution /= probability_distribution.sum()
 
         return predictions
