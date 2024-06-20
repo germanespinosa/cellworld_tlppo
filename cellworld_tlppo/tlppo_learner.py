@@ -2,7 +2,6 @@ import typing
 import numpy as np
 import gymnasium
 import sklearn.cluster as skc
-from gymnasium import spaces
 
 
 def eigenvector_centrality(adj_matrix):

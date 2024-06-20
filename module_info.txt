@@ -11,6 +11,7 @@
     "install_requires": [
         "cellworld_game",
         "cellworld_gym",
+        "cellworld_belief",
         "scikit-learn"
     ],
     "license_type": "MIT",

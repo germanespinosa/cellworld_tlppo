@@ -1,6 +1,4 @@
 import random
-import math
-import sys
 import typing
 import cellworld_game as cg
 from .graph import Graph
@@ -19,7 +17,7 @@ class TreeNode(object):
         self.state = state
         self.graph: Graph = graph
         self.parent: TreeNode = parent
-        self.children: typing.List[TreeNode] = []
+        self.children: typing.Dict[int, TreeNode] = {}
         self.value: float = -math.inf
         self.visits: int = 0
         self.step_reward: float = 0
@@ -52,7 +50,7 @@ class TreeNode(object):
                              state=child_node.state,
                              graph=self.graph,
                              parent=self)
-            self.children.append(child)
+            self.children[connection] = child
 
     def select_by_label(self,
                         label: int,
@@ -61,9 +59,8 @@ class TreeNode(object):
         if not self.children:
             self.expand()
 
-        for child in self.children:
-            if child.label == label:
-                return child
+        if label in self.children:
+            return self.children[label]
 
         return self.select(c=c)
 
@@ -76,9 +73,9 @@ class TreeNode(object):
         if not self.children:
             return self
 
-        best_ucb1 = self.children[0].ucb1(c=c)
-        best_children = [self.children[0]]
-        for child in self.children[1:]:
+        best_ucb1 = -math.inf
+        best_children = []
+        for label, child in self.children.items():
             ucb1 = child.ucb1(c=c)
             if ucb1 > best_ucb1:
                 best_ucb1 = ucb1
@@ -88,10 +85,15 @@ class TreeNode(object):
         selected = random.choice(best_children)
         return selected
 
+    def get_random(self):
+        label = random.choice(list(self.children.keys()))
+        return self.children[label]
+
     def get_best(self):
+
         best_value = None
         best_child = None
-        for child in self.children:
+        for label, child in self.children.items():
             if child.visits == 0:
                 continue
             if best_value is None:
@@ -105,19 +107,17 @@ class TreeNode(object):
 
     def propagate_reward(self,
                          reward: float,
-                         discount: float):
+                         discount: float,
+                         initial_value: bool = False):
         self.visits += 1
-        self.value = max(reward, self.value)
+        if initial_value:
+            self.value = reward
+        else:
+            self.value = max(reward, self.value)
         if self.parent:
             self.parent.propagate_reward(reward=self.value * (1-discount),
-                                         discount=discount)
-
-    def print(self, level: int = 0):
-        if level:
-            print("%sL_" % ("".join([" " for i in range(level*2)])), end="")
-        print(self.label)
-        for child in self.children:
-            child.print(level=level + 1)
+                                         discount=discount,
+                                         initial_value=initial_value)
 
 
 class Tree(object):
@@ -134,7 +134,15 @@ class Tree(object):
         closest_node = self.graph.get_nearest(point=point)
         for label in self.graph.edges[closest_node.label]:
             node = self.graph.nodes[label]
-            self.root.children.append(TreeNode(graph=graph,
-                                               label=node.label,
-                                               state=node.state,
-                                               parent=self.root))
+            self.root.children[label] = TreeNode(graph=graph,
+                                                 label=node.label,
+                                                 state=node.state,
+                                                 parent=self.root)
+
+    def move(self, point: cg.Point.type):
+        node = self.graph.get_nearest(point=point)
+        if node.label in self.root.children:
+            self.root = self.root.children[node.label]
+            self.root.parent = None
+        else:
+            self.root.state.point = point
