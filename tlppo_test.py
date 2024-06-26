@@ -7,17 +7,22 @@ from test_conditions import get_tlppo, get_belief_state_components
 import os
 
 create_video = False
-result_folders = "results6"
+result_folders = "New_Baseline"
 os.makedirs(result_folders, exist_ok=True)
-episode_count = 1000
+episode_count = 100
 
 for condition in [1, 2, 3, 4, 5]:
-    for depth in [3]:
+    for depth in [1, 2, 3, 4, 5]:
         process = False
         for budget in [20, 50, 100, 200, 500]:
-            result_file = f"{result_folders}/logs/condition_{condition}/depth_{depth}/budget_{budget}/condition_{condition}_{depth}_{budget}.json"
+            data_point_results_folder = f"results/{result_folders}/logs/condition_{condition}/depth_{depth}/budget_{budget}"
+            data_point_videos_folder = f"results/{result_folders}/videos/condition_{condition}/depth_{depth}/budget_{budget}"
+            data_point_experiment_name = f"condition_{condition}_{depth}_{budget}"
+
+            data_point_file = f"{data_point_experiment_name}.json"
+            data_point_file_path = f"{data_point_results_folder}/{data_point_file}"
             print(f"Condition: {condition}, Depth: {depth}, Budget: {budget}", end="")
-            if os.path.exists(result_file):
+            if os.path.exists(data_point_file_path):
                 print("... already exists")
                 continue
             process = True
@@ -32,16 +37,15 @@ for condition in [1, 2, 3, 4, 5]:
                                                belief_state_components=bs_components,
                                                belief_state_probability=1)
 
-            save_log_output(environment.model,
-                            f"condition_{condition}_{depth}_{budget}",
-                            f"{result_folders}/logs/condition_{condition}/depth_{depth}/budget_{budget}",
+            save_log_output(model=environment.model,
+                            experiment_name=data_point_experiment_name,
+                            log_folder=data_point_results_folder,
                             save_checkpoint=False)
 
             if create_video:
                 environment.model.render_agent_visibility = "prey"
-                save_video_output(environment.model,
-                                  f"{result_folders}/videos/condition_{condition}/depth_{depth}/budget_{budget}")
-
+                save_video_output(model=environment.model,
+                                  video_folder=data_point_videos_folder)
 
             tlppo = get_tlppo(environment=environment,
                               depth=depth,
