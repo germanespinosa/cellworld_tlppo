@@ -7,7 +7,7 @@ from test_conditions import get_tlppo, get_belief_state_components
 import os
 
 create_video = False
-result_folders = "New_Baseline"
+result_folders = "LowEntropyLumpy"
 os.makedirs(result_folders, exist_ok=True)
 episode_count = 100
 
@@ -29,7 +29,7 @@ for condition in [1, 2, 3, 4, 5]:
             print("")
             bs_components = get_belief_state_components(condition=condition)
 
-            environment = cg.BotEvadeBeliefEnv(world_name="21_05",
+            environment = cg.BotEvadeBeliefEnv(world_name="030_12_0063",
                                                real_time=False,
                                                render=create_video,
                                                use_lppos=False,

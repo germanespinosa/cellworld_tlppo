@@ -35,8 +35,8 @@ def DataFile(file_name:str)-> str:
   full_path = "mice_data/%s" % file_name
   return full_path
 
-DownloadDataFile("experiments/experiment_list.json")
-Experiment_list = JsonObject.load_from_file(DataFile("experiments/experiment_list.json"))
+DownloadDataFile("21_05/experiment_list.json")
+Experiment_list = JsonObject.load_from_file(DataFile("21_05/experiment_list.json"))
 
 def GetEpisodes(phase="", subject="", iterations=[]):
   def filter(experiment):
@@ -68,20 +68,20 @@ import random
 from cellworld import *
 
 occlusions = '21_05'
-w = World.get_from_parameters_names('hexagonal',"canonical",occlusions)
+w = World.get_from_parameters_names('hexagonal', "canonical", occlusions)
 subject_str = 'prey'
 scalar = 1.0
 mv = 2/2.34
 
 min_x, max_x = 0.05, 0.95
-mice =['FMM9', 'FMM10', 'FMM13','FMM14','MMM10','MMM11','MMM13','MMM14']
+mice =['FMM9', 'FMM10', 'FMM13', 'FMM14', 'MMM10', 'MMM11', 'MMM13', 'MMM14']
 
 result_list = []
 
 for subject in mice:
     experiment_files = []
     def filter(experiment):
-        return (experiment.phase == 'RT') and (experiment.subject == subject)
+        return (experiment.phase == ['RT']) and (experiment.subject == subject)
 
     RT_experiment_files = Experiment_list.filter(key=filter)[-3:]
     experiment_files += RT_experiment_files
@@ -112,7 +112,6 @@ for subject in mice:
         for e, ep in df.iloc[:].iterrows():
             if ep['bad_episode'] == 1:
                 continue
-            mouse = ep['mouse']
             episode = ep['ep_data']
             if episode.captures:
                 sum_captured += 1
@@ -179,5 +178,5 @@ for subject in mice:
 
 import json
 
-with open('mice_results.json', 'w') as f:
+with open('mice_21_05_results.json', 'w') as f:
     json.dump(result_list, f)

@@ -56,5 +56,5 @@ for condition in [1, 2, 3, 4, 5]:
             results[f"condition{condition}"][f"depth{depth}"][f"budget{budget}"]["avg_used_cells"] = total_used_cells / len(experiment.episodes)
 
 
-with open("results/sim_results.json", "wb") as f:
+with open("results/results/sim_results.json", "wb") as f:
     jsonbind.dump(obj=results, fp=f)

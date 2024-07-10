@@ -5,19 +5,22 @@ import matplotlib.pyplot as plt
 from cellworld import QuickBundles as QB
 import matplotlib.colors as mcolors
 
-title = "Baseline"
+title = "PlanReuse"
 
 conditions = [1, 2, 3, 4, 5]
 depths = [1, 2, 3, 4, 5]
 budgets = [20, 50, 100, 200, 500]
 
-figures_folder = "figures/results_with_clusters_nobudget_10"
+world = "030_12_0063"
+figures_folder = "figures/LowEntropyLumpy"
+sim_result_folder = "LowEntropyLumpy"
+
+mice_results_file = f"mice_{world}_results.json"
 os.makedirs(figures_folder, exist_ok=True)
 
-sim_result_folder = "../results4"
-sim_result_file = f"../results4/sim_results_new_nobudget10.json"
 
-if not os.path.exists(sim_result_file):
+sim_result_file = f"../results/{sim_result_folder}/sim_results.json"
+if not os.path.exists(mice_results_file):
     clusters_colors = list(mcolors.TABLEAU_COLORS.keys())
 
     import cellworld as cw
@@ -26,7 +29,7 @@ if not os.path.exists(sim_result_file):
 
     world = cw.World.get_from_parameters_names("hexagonal",
                                                "canonical",
-                                               "21_05")
+                                               world)
     clusters_folder = f"{figures_folder}/clusters"
     os.makedirs(clusters_folder, exist_ok=True)
 
@@ -35,7 +38,7 @@ if not os.path.exists(sim_result_file):
         for depth in depths:
             results[f"condition{condition}"][f"depth{depth}"] = {}
             for budget in budgets:
-                experiment_file = os.path.join(f"{sim_result_folder}",
+                experiment_file = os.path.join(f"../results/{sim_result_folder}",
                                                "logs",
                                                f"condition_{condition}",
                                                f"depth_{depth}",
@@ -105,7 +108,7 @@ if not os.path.exists(sim_result_file):
 
 
 sim_results = jsonbind.load(open(sim_result_file))
-mice_results = jsonbind.load(open("mice_results.json"))
+mice_results = jsonbind.load(open(mice_results_file))
 
 def get_n_colors(n):
     cmap = plt.get_cmap('viridis')
@@ -308,6 +311,8 @@ else:
             for budget, budget_results in depth_results.items():
                 normalized_sim_results[condition][depth][budget] = {}
                 for metric, value in budget_results.items():
+                    if metric not in metrics_avg_values:
+                        continue
                     normalized_value = abs(1 - (value / metrics_avg_values[metric]))
                     normalized_sim_results[condition][depth][budget][metric] = normalized_value
     with open(normalized_sim_results_file, "wb") as f:
@@ -316,9 +321,6 @@ else:
 plt.close()
 
 metrics = ["cluster_count", "cluster_distance", "avg_x", "avg_duration", "avg_length", "avg_predator_prey_distance", "avg_used_cells", "avg_survived"]
-
-# metrics = ["cluster_count", "avg_x", "avg_duration", "avg_length", "avg_predator_prey_distance", "avg_used_cells"]
-
 
 budgets_colors = list(mcolors.TABLEAU_COLORS.keys())
 
@@ -340,6 +342,8 @@ for depth in depths:
             sum_diffs = 0
             count_diffs = 0
             for metric in metrics:
+                if metric not in metrics_avg_values:
+                    continue
                 value = normalized_sim_results[f"condition{condition}"][f"depth{depth}"][f"budget{budget}"][metric]
                 sum_diffs += value
                 count_diffs += 1
