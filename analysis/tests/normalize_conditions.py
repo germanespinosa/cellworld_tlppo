@@ -38,6 +38,7 @@ if __name__ == "__main__":
     def normalize_condition(data, baseline, normalized_condition={}):
         for value in data:
             if value != "groups":
+                print(value)
                 normalized_condition[value] = data[value] / baseline[value]
         if "groups" in data:
             normalized_condition["groups"] = {}

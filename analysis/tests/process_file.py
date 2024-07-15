@@ -1,6 +1,10 @@
 import json
 import argparse
 import cellworld as cw
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
+
+clusters_colors = list(mcolors.TABLEAU_COLORS.keys())
 
 
 def parse_arguments():
@@ -8,11 +12,12 @@ def parse_arguments():
     parser.add_argument('file', type=str, help='file to summarize')
     parser.add_argument('-o', '--output_file', type=str, help='output file', required=True)
     parser.add_argument('-r', '--root_folder', type=str, help='root folder', required=True)
+    parser.add_argument('-cf', '--clusters_folder', type=str, help='clusters folder', required=True)
     args = parser.parse_args()
     return args
 
 
-def process_data(data: dict, processed_data: dict = None):
+def process_data(data: dict, world: cw.World, clusters_file: str, processed_data: dict = None):
     if processed_data is None:
         processed_data = {}
     col = data
@@ -38,10 +43,10 @@ def process_data(data: dict, processed_data: dict = None):
         processed_data["avg_survived"] = values["survived"] / values["episode_count"]
         values["clusters"].filter_clusters(int(values["clusters"].streamline_count() * .05))
         values["clusters"].assign_unclustered()
-        # d = cw.Display(world=world)
-        # d.plot_clusters(clusters=clusters, colors=clusters_colors)
-        # plt.savefig(f"{clusters_folder}/clusters_condition{condition}_depth{depth}_budget{budget}.png")
-        # plt.close()
+        d = cw.Display(world=world)
+        d.plot_clusters(clusters=values["clusters"], colors=clusters_colors)
+        plt.savefig(f"{clusters_file}.png")
+        plt.close()
         processed_data["cluster_count"] = len(values["clusters"])
         distances = values["clusters"].get_distances()
         if len(distances) > 0:
@@ -54,10 +59,12 @@ def process_data(data: dict, processed_data: dict = None):
     if "groups" in col:
         groups = col["groups"]
         processed_data["groups"] = {}
-        for group_name, group in col["groups"].items():
+        for group_name, group in groups.items():
             processed_data["groups"][group_name] = {}
-            process_data(group, processed_data["groups"][group_name])
-
+            process_data(data=group,
+                         world=world,
+                         clusters_file=f"{clusters_file}_{group_name}",
+                         processed_data=processed_data["groups"][group_name])
         sum_cluster_count = 0
         sum_cluster_distance = 0
         for group_name, group in processed_data["groups"].items():
@@ -111,7 +118,7 @@ def summarize_experiments(file_records: list) -> dict:
                 col = col["groups"][group_name]
             else:
                 break
-
+    world = None
     for file_record in file_records:
         print(file_record)
         experiment_file = f"{args.root_folder}/{file_record["file"]}"
@@ -158,7 +165,9 @@ def summarize_experiments(file_records: list) -> dict:
             add_value(file_record, "time", prey_trajectory[-1].time_stamp - prey_trajectory[0].time_stamp)
             add_value(file_record, "used_cells", len(used_cell_ids))
             add_value(file_record, "clusters", prey_trajectory)
-    return process_data(data)
+    return process_data(data=data,
+                        world=world,
+                        clusters_file=f"{args.clusters_folder}/clusters")
 
 
 if __name__ == "__main__":

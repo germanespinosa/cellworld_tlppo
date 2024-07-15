@@ -1,1 +1,1 @@
-{"name":  "Test Name", "difference_plot": {"baseline": null, "conditions": ["group_0", "group_1"]}}
+{"name":  "Test Name", "difference_plot": {"baseline": [], "conditions": ["group_0", "group_1"]}}
