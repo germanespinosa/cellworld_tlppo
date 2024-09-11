@@ -7,6 +7,8 @@ import matplotlib.colors as mcolors
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Summarizes an experiment file')
     parser.add_argument('test_folder', type=str, help='folder containing the baseline and conditions file')
+    parser.add_argument('-cr', '--conditions_root_folder', type=str, help='conditions root folder', required=True)
+    parser.add_argument('-br', '--baseline_root_folder', type=str, help='baseline root folder', required=True)
     args = parser.parse_args()
     return args
 
@@ -50,7 +52,8 @@ def plot_results(ax,
                              alpha=alpha[1:])
 
 
-def plot_axes(baseline,
+def plot_axes(title,
+              baseline,
               conditions,
               x_axis,
               y_axis,
@@ -59,7 +62,7 @@ def plot_axes(baseline,
               condition_groups=[]):
     size = 20
     fig = plt.figure(figsize=(10, 6))
-    fig.suptitle("title")
+    fig.suptitle(title)
     ax = fig.add_subplot(111)
 
     plot_results(ax=ax,
@@ -71,7 +74,6 @@ def plot_axes(baseline,
                  groups=baseline_groups,
                  size=[350, 50, 15, 15, 15, 15],
                  alpha=[.3, .5, 1, 1, 1, 1])
-
 
     conditions_colors = list(mcolors.TABLEAU_COLORS.keys())[:len(conditions["groups"])]
 
@@ -112,6 +114,19 @@ if __name__ == "__main__":
         print(f"Cannot find folder {args.test_folder}")
         exit(1)
 
+    if not os.path.isdir(args.baseline_root_folder):
+        print(f"Cannot find baseline root folder {args.baseline_root_folder}")
+        exit(1)
+
+    if not os.path.isdir(args.conditions_root_folder):
+        print(f"Cannot find conditions root folder {args.conditions_root_folder}")
+        exit(1)
+
+    test_file = os.path.join(args.test_folder, "config.json")
+    if not os.path.isfile(test_file):
+        print(f"Error: file {test_file} does not exist")
+        exit(1)
+
     baseline_file = os.path.join(args.test_folder, "baseline.json")
     if not os.path.isfile(baseline_file):
         print(f"Error: file {baseline_file} does not exist")
@@ -123,6 +138,15 @@ if __name__ == "__main__":
         print(f"Error: file {conditions_file} does not exist")
         exit(1)
 
+    figures_folder = os.path.join(args.test_folder, "figures")
+    os.makedirs(figures_folder, exist_ok=True)
+
+    baseline_clusters_folder = os.path.join(args.test_folder, "figures", "baseline_clusters")
+    os.makedirs(baseline_clusters_folder, exist_ok=True)
+
+    conditions_clusters_folder = os.path.join(args.test_folder, "figures", "conditions_clusters")
+    os.makedirs(conditions_clusters_folder, exist_ok=True)
+
     baseline_summary_file = os.path.join(args.test_folder, "baseline_summary.json")
     if not os.path.isfile(baseline_summary_file):
         print("Creating baseline summary file")
@@ -130,7 +154,7 @@ if __name__ == "__main__":
         import sys
         import threading
         script = 'process_file.py'
-        command = [sys.executable, script, baseline_file, "-o", baseline_summary_file, "-r", "../mice_data"]
+        command = [sys.executable, script, baseline_file, "-o", baseline_summary_file, "-r", args.baseline_root_folder, "-cf", baseline_clusters_folder]
         thread = threading.Thread(target=start_process, args=(command,))
         thread.start()
         running_processes.append(thread)
@@ -142,17 +166,28 @@ if __name__ == "__main__":
         import sys
         import threading
         script = 'process_file.py'
-        command = [sys.executable, script, conditions_file, "-o", conditions_summary_file, "-r", "../../results"]
+        command = [sys.executable, script, conditions_file, "-o", conditions_summary_file, "-r", args.conditions_root_folder, "-cf", conditions_clusters_folder]
         thread = threading.Thread(target=start_process, args=(command,))
         thread.start()
         running_processes.append(thread)
-
 
     if running_processes:
         print("Waiting for processes to finish...")
         for process in running_processes:
             process.join()
 
+    conditions_normalized_summary_file = os.path.join(args.test_folder, "conditions_normalized_summary.json")
+    if not os.path.isfile(conditions_normalized_summary_file):
+        print("Creating conditions normalized summary file")
+        import subprocess
+        import sys
+        import threading
+        script = 'normalize_conditions.py'
+        command = [sys.executable, script, args.test_folder]
+        start_process(command)
+
+    with open(test_file, "r") as f:
+        test_config = json.load(f)
 
     with open(baseline_summary_file, "r") as f:
         baseline_summary = json.load(f)
@@ -164,16 +199,15 @@ if __name__ == "__main__":
 
     conditions_groups = conditions_summary["groups"]
 
-    figures_folder = os.path.join(args.test_folder, "figures")
 
-    os.makedirs(figures_folder, exist_ok=True)
-
+    print("Creating figures")
     for x_axis in baseline_summary["data"]:
         for y_axis in baseline_summary["data"]:
             if x_axis == y_axis or "groups" in [x_axis, y_axis]:
                 continue
             output_file = os.path.join(figures_folder, f"{x_axis}_{y_axis}.png")
-            plot_axes(baseline=baseline_summary["data"],
+            plot_axes(title=test_config["name"],
+                      baseline=baseline_summary["data"],
                       conditions=conditions_summary["data"],
                       x_axis=x_axis,
                       y_axis=y_axis,
