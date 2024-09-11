@@ -31,21 +31,23 @@ if __name__ == "__main__":
     group_by = args.group_by.split(',')
     conditions_file_list = []
 
-    for condition in conditions:
-        condition_folder = os.path.join(args.result_folder, 'logs', f"condition_{condition}")
-        if os.path.isdir(condition_folder):
-            for depth in depths:
-                depth_folder = os.path.join(condition_folder, f"depth_{depth}")
-                if os.path.isdir(depth_folder):
-                    for budget in budgets:
-                        budget_folder = os.path.join(depth_folder, f"budget_{budget}")
-                        if os.path.isdir(budget_folder):
-                            experiment_file = os.path.join(budget_folder, f"condition_{condition}_{depth}_{budget}.json")
-                            file_data = {"condition": f"condition_{condition}", "depth": depth, "budget": budget}
-                            condition_file = {"file": experiment_file}
-                            for i, group in enumerate(group_by):
-                                condition_file[f"group_{i}"] = file_data[group]
-                            conditions_file_list.append(condition_file)
+    for entropy in ["00", "03", "08"]:
+        for world_number in ["00", "01", "02", "03"]:
+            world = f"{world_number}_{entropy}"
+            condition_folder = os.path.join(args.result_folder, 'logs', f"{world}_condition_4")
+            if os.path.isdir(condition_folder):
+                for depth in depths:
+                    depth_folder = os.path.join(condition_folder, f"depth_{depth}")
+                    if os.path.isdir(depth_folder):
+                        for budget in budgets:
+                            budget_folder = os.path.join(depth_folder, f"budget_{budget}")
+                            if os.path.isdir(budget_folder):
+                                experiment_file = os.path.join(budget_folder, f"{world}_condition_4_{depth}_{budget}.json")
+                                file_data = {"condition": f"entropy_{entropy}", "depth": depth, "budget": budget}
+                                condition_file = {"file": experiment_file}
+                                for i, group in enumerate(group_by):
+                                    condition_file[f"group_{i}"] = file_data[group]
+                                conditions_file_list.append(condition_file)
 
     conditions = {"groups": group_by, "files": conditions_file_list}
     with open(args.output_file, "w") as f:
